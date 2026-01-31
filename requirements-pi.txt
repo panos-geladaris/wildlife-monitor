@@ -1,0 +1,5 @@
+# Raspberry Pi specific dependencies
+# Install on Pi only: pip install -r requirements-pi.txt
+
+picamera2>=0.3.12
+RPi.GPIO>=0.7.1
