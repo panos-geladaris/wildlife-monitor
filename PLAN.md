@@ -42,33 +42,32 @@ Build a Raspberry Pi-based system to detect, record, and classify animals passin
 
 ---
 
-### 2. Analysis Module 🔲
-**Status:** Planned
+### 2. Analysis Module ✅
+**Status:** Complete
 
 **Components:**
-- `model.py` - TorchVision model loading and inference
-- `classifier.py` - Animal classification logic
-- `frame_extractor.py` - Extract frames from video for analysis
+- `model.py` - TorchVision model loading and inference (MobileNetV3, ResNet18)
+- `classifier.py` - Animal classification with confidence thresholds
+- `frame_extractor.py` - Extract frames from video using OpenCV
 
-**Approach:**
-- Use MobileNetV3 (lightweight, suitable for Pi)
-- Pretrained on ImageNet, filter for animal classes
-- Optional: Fine-tune on iNaturalist dataset for better wildlife detection
+**Features:**
+- MobileNetV3 pretrained on ImageNet (lightweight for Pi)
+- Maps 200+ ImageNet classes to simplified animal categories
+- Configurable confidence threshold
+- Multi-frame video analysis (best result selection)
+- Context manager support for memory management
 
-**Animal Classes to Detect:**
-- Birds (various species)
-- Cats
-- Dogs
-- Squirrels
-- Foxes
-- Rabbits
-- Other small mammals
+**Animal Classes Detected:**
+- Birds (60+ species mapped)
+- Cats (domestic and wild)
+- Dogs (100+ breeds)
+- Squirrels, Foxes, Rabbits
+- Deer, Hedgehogs, Mice
 
 **Output:**
-- Detected animal class
-- Confidence score
-- Bounding box (if using detection model)
-- Timestamp
+- ClassificationResult with animal_class, confidence, timestamp
+- Top-k predictions for debugging
+- Frame number and timestamp for video analysis
 
 ---
 
@@ -147,7 +146,7 @@ GET  /api/status              - System status
 
 1. ✅ **Capture Module** - Motion detection, camera, scheduling
 2. ✅ **Storage Module** - Database and video management
-3. 🔲 **Analysis Module** - ML classification pipeline
+3. ✅ **Analysis Module** - ML classification pipeline
 4. 🔲 **Web UI Module** - Flask app for viewing results
 5. 🔲 **Integration** - Connect all modules, main.py entry point
 6. 🔲 **Deployment** - Systemd service, auto-start on Pi

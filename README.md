@@ -40,7 +40,7 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 |--------|--------|-------------|
 | `src/capture/` | ✅ Complete | Motion detection, camera control, scheduling |
 | `src/storage/` | ✅ Complete | SQLite database, video file management |
-| `src/analysis/` | 🔲 Planned | TorchVision animal classification |
+| `src/analysis/` | ✅ Complete | TorchVision animal classification |
 | `src/web/` | 🔲 Planned | Flask web UI |
 
 ## Installation
@@ -318,6 +318,61 @@ sudo mount /dev/sda1 /mnt/wildlife-data
 - Use `retention_days` to auto-delete old videos
 - Consider using a high-endurance SD card
 
+## Analysis Module
+
+The analysis module uses TorchVision's MobileNetV3 to classify animals in captured videos.
+
+### Supported Animals
+
+- Birds (various species)
+- Cats
+- Dogs
+- Squirrels
+- Foxes
+- Rabbits
+- Deer
+- Hedgehogs
+- Mice
+
+### Usage
+
+```python
+from src.analysis import AnimalClassifier
+from pathlib import Path
+
+# Initialize classifier
+classifier = AnimalClassifier(
+    model_name="mobilenet_v3_small",  # Lightweight model for Pi
+    confidence_threshold=0.3,
+)
+
+# Classify a video
+result = classifier.classify_video(Path("data/videos/motion_20240115_120000.mp4"))
+
+print(f"Detected: {result.animal_class}")
+print(f"Confidence: {result.confidence:.2%}")
+print(f"Is animal: {result.is_animal}")
+
+# Get all frame results
+all_results = classifier.classify_video_all_frames(video_path, num_frames=5)
+for r in all_results:
+    print(f"Frame {r.frame_number}: {r.animal_class} ({r.confidence:.2%})")
+```
+
+### ML Dependencies on Raspberry Pi
+
+PyTorch on Raspberry Pi requires special installation:
+
+```bash
+# Install PyTorch for ARM (Pi 4)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Install OpenCV
+pip install opencv-python-headless  # Headless version for Pi
+```
+
+**Note:** Model inference on Pi 4 takes ~1-2 seconds per frame with MobileNetV3.
+
 ## Running Tests
 
 ```bash
@@ -332,6 +387,7 @@ pytest tests/ -v
 
 # Run specific test file
 pytest tests/test_database.py
+pytest tests/test_analysis.py
 ```
 
 ## Project Structure
@@ -348,11 +404,15 @@ wildlife-monitor/
 │   ├── storage/
 │   │   ├── database.py         # SQLite operations
 │   │   └── video_store.py      # Video file management
-│   ├── analysis/               # (planned) ML classification
+│   ├── analysis/
+│   │   ├── model.py            # TorchVision model loading
+│   │   ├── classifier.py       # Animal classification
+│   │   └── frame_extractor.py  # Video frame extraction
 │   └── web/                    # (planned) Flask UI
 ├── tests/
 │   ├── test_database.py
-│   └── test_video_store.py
+│   ├── test_video_store.py
+│   └── test_analysis.py
 ├── data/
 │   ├── videos/                 # Captured video clips
 │   └── wildlife.db             # SQLite database
