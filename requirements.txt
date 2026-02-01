@@ -9,6 +9,7 @@ PyYAML>=6.0
 # Testing
 pytest>=7.0.0
 
-# ML (install separately: pip install torch torchvision)
-# torch>=2.0.0
-# torchvision>=0.15.0
+# ML dependencies (required for analysis module)
+torch>=2.0.0
+torchvision>=0.15.0
+opencv-python>=4.8.0
