@@ -26,6 +26,8 @@ class CaptureServiceConfig:
     cooldown_seconds: float = 5.0
     hourly_capture_minute: int = 0
     simulation_mode: bool = False
+    zoom_level: float = 1.0
+    autofocus: bool = True
 
 
 class CaptureService:
@@ -46,6 +48,11 @@ class CaptureService:
             default_duration=config.video_duration,
             simulation_mode=config.simulation_mode
         )
+        
+        if config.zoom_level != 1.0:
+            self._camera.set_zoom(config.zoom_level)
+        if config.autofocus:
+            self._camera.set_autofocus(True)
         
         self._motion_detector = MotionDetector(
             gpio_pin=config.gpio_pin,
@@ -123,6 +130,8 @@ class CaptureService:
         logger.info(f"  - Motion detection: GPIO {self.config.gpio_pin}")
         logger.info(f"  - Hourly captures: minute {self.config.hourly_capture_minute}")
         logger.info(f"  - Video duration: {self.config.video_duration}s")
+        logger.info(f"  - Zoom level: {self.config.zoom_level}x")
+        logger.info(f"  - Autofocus: {self.config.autofocus}")
         logger.info(f"  - Output: {self.config.video_output_dir}")
     
     def stop(self) -> None:
@@ -217,7 +226,7 @@ if __name__ == "__main__":
     
     config = CaptureServiceConfig(
         video_output_dir=Path(__file__).parent.parent.parent / "data" / "videos",
-        video_duration=1.5,
+        video_duration=2.5,
         simulation_mode=simulation_mode
     )
     
