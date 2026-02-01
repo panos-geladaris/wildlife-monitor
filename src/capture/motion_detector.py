@@ -114,14 +114,17 @@ class MotionDetector:
             poll_interval: How often to check sensor (seconds)
         """
         self._running = True
-        logger.info("Starting motion monitoring...")
+        logger.info(f"Starting motion monitoring (simulation={self.simulation_mode})...")
         
         try:
             while self._running:
-                self.check_motion()
+                if self.check_motion():
+                    logger.debug("Motion check returned True")
                 time.sleep(poll_interval)
         except KeyboardInterrupt:
             logger.info("Motion monitoring stopped by user")
+        except Exception as e:
+            logger.error(f"Motion monitoring error: {e}")
         finally:
             self.stop()
     
