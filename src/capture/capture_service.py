@@ -192,10 +192,23 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     
+    import os
+    
+    # Auto-detect: use simulation mode unless on Pi (or set SIMULATE=0 to force real hardware)
+    simulate = os.environ.get("SIMULATE", "auto")
+    if simulate == "auto":
+        try:
+            import RPi.GPIO
+            simulation_mode = False
+        except ImportError:
+            simulation_mode = True
+    else:
+        simulation_mode = simulate == "1"
+    
     config = CaptureServiceConfig(
         video_output_dir=Path(__file__).parent.parent.parent / "data" / "videos",
         video_duration=1.5,
-        simulation_mode=True
+        simulation_mode=simulation_mode
     )
     
     service = CaptureService(config)
