@@ -119,6 +119,7 @@ class CaptureService:
         self._motion_thread.start()
         
         logger.info("Capture service started")
+        logger.info(f"  - Simulation mode: {self.config.simulation_mode}")
         logger.info(f"  - Motion detection: GPIO {self.config.gpio_pin}")
         logger.info(f"  - Hourly captures: minute {self.config.hourly_capture_minute}")
         logger.info(f"  - Video duration: {self.config.video_duration}s")
@@ -157,33 +158,42 @@ class CaptureService:
 def _wait_for_exit():
     """Wait for Ctrl+X or Ctrl+C to exit."""
     import sys
-    import select
+    import time
+    import signal
+    
+    stop_flag = False
+    
+    def handle_signal(signum, frame):
+        nonlocal stop_flag
+        stop_flag = True
+    
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
+    
+    print("Capture service running. Press Ctrl+C to stop.")
     
     try:
         import termios
         import tty
+        import select
         
         old_settings = termios.tcgetattr(sys.stdin)
         try:
-            tty.setraw(sys.stdin.fileno())
-            print("Capture service running. Press Ctrl+X or Ctrl+C to stop.\r")
-            while True:
+            tty.setcbreak(sys.stdin.fileno())  # cbreak instead of raw - allows output
+            while not stop_flag:
                 if select.select([sys.stdin], [], [], 0.5)[0]:
                     ch = sys.stdin.read(1)
-                    if ch == '\x18' or ch == '\x03':  # Ctrl+X or Ctrl+C
-                        print("\r\nShutting down...")
+                    if ch == '\x18':  # Ctrl+X
+                        print("\nShutting down...")
                         return
+                time.sleep(0.1)
         finally:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
     except (ImportError, termios.error):
-        # Fallback for non-Unix systems
-        import time
-        print("Capture service running. Press Ctrl+C to stop.")
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\nShutting down...")
+        while not stop_flag:
+            time.sleep(0.5)
+    
+    print("\nShutting down...")
 
 
 if __name__ == "__main__":
