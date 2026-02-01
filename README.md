@@ -23,7 +23,7 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 ## Hardware Requirements
 
 - Raspberry Pi 4 (recommended for ML inference)
-- Pi Camera Module or USB webcam
+- Pi Camera Module 3 (12MP, autofocus, HDR support)
 - PIR Motion Sensor (HC-SR501)
 
 ### PIR Sensor Wiring
@@ -68,6 +68,22 @@ pip install picamera2 RPi.GPIO
 ```bash
 pip install torch torchvision
 ```
+
+## Running on Raspberry Pi
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+pip install -r requirements-pi.txt
+
+# Run the capture service
+python -m src.capture.capture_service
+```
+
+The service will start monitoring the PIR sensor and capturing video on motion detection.
 
 ## Running the Capture Module
 

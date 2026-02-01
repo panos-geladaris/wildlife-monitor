@@ -154,9 +154,39 @@ class CaptureService:
         return self._running
 
 
-if __name__ == "__main__":
-    import time
+def _wait_for_exit():
+    """Wait for Ctrl+X or Ctrl+C to exit."""
+    import sys
+    import select
     
+    try:
+        import termios
+        import tty
+        
+        old_settings = termios.tcgetattr(sys.stdin)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            print("Capture service running. Press Ctrl+X or Ctrl+C to stop.\r")
+            while True:
+                if select.select([sys.stdin], [], [], 0.5)[0]:
+                    ch = sys.stdin.read(1)
+                    if ch == '\x18' or ch == '\x03':  # Ctrl+X or Ctrl+C
+                        print("\r\nShutting down...")
+                        return
+        finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+    except (ImportError, termios.error):
+        # Fallback for non-Unix systems
+        import time
+        print("Capture service running. Press Ctrl+C to stop.")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+
+
+if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -179,16 +209,6 @@ if __name__ == "__main__":
     service.start()
     
     try:
-        # Test manual capture
-        service.trigger_manual_capture()
-        
-        # Test simulated motion
-        time.sleep(1)
-        service.simulate_motion()
-        
-        # Keep running
-        time.sleep(5)
-    except KeyboardInterrupt:
-        pass
+        _wait_for_exit()
     finally:
         service.stop()

@@ -1,5 +1,7 @@
 # Raspberry Pi specific dependencies
 # Install on Pi only: pip install -r requirements-pi.txt
+# Requires Pi Camera Module 3 (uses libcamera/picamera2 stack)
 
-picamera2>=0.3.12
+picamera2>=0.3.17
+libcamera>=0.0.5
 RPi.GPIO>=0.7.1

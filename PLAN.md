@@ -19,7 +19,7 @@ Build a Raspberry Pi-based system to detect, record, and classify animals passin
 | Component | Model | Purpose |
 |-----------|-------|---------|
 | Computer | Raspberry Pi 4 | Main processing unit |
-| Camera | Pi Camera Module | Video capture |
+| Camera | Pi Camera Module 3 | Video capture (12MP, autofocus, HDR) |
 | Sensor | HC-SR501 PIR | Motion detection |
 
 ## Modules
