@@ -153,14 +153,94 @@ python -m src.capture.scheduler
 
 ## Configuration
 
+Configuration is loaded from `config.yaml` in the project root. You can also specify a custom config file:
+
+```bash
+python -m src.capture.capture_service --config /path/to/config.yaml
+```
+
+### config.yaml
+
+```yaml
+# Motion-triggered captures
+motion:
+  video_duration: 2.5        # Duration in seconds
+  cooldown_seconds: 5.0      # Minimum time between triggers
+
+# Hourly scheduled captures  
+hourly:
+  enabled: true
+  minute: 0                  # Minute of each hour (0-59)
+  video_duration: 15.0       # Duration in seconds
+
+# 15-minute interval captures (with zoom comparison)
+interval:
+  enabled: true
+  minutes: 15                # Interval in minutes
+  video_duration: 7.0        # Duration in seconds
+  zoom_levels: [1.0, 2.0]    # Capture at each zoom level
+
+# Camera settings
+camera:
+  resolution: [1280, 720]    # Width x Height
+  framerate: 30
+  zoom_level: 1.0            # Default zoom (1.0-10.0)
+  autofocus: true
+
+# Hardware
+hardware:
+  gpio_pin: 17               # PIR sensor GPIO pin
+
+# Output
+output:
+  video_dir: "data/videos"
+```
+
+### Configuration Parameters
+
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `gpio_pin` | 17 | GPIO pin for PIR sensor |
-| `video_duration` | 2.0 | Recording length (seconds) |
-| `resolution` | (1280, 720) | Video resolution |
-| `framerate` | 30 | Video framerate |
-| `cooldown_seconds` | 5.0 | Minimum time between motion triggers |
-| `hourly_capture_minute` | 0 | Minute of hour for scheduled capture |
+| `hardware.gpio_pin` | 17 | GPIO pin for PIR sensor |
+| `motion.video_duration` | 2.5 | Motion-triggered recording length (seconds) |
+| `motion.cooldown_seconds` | 5.0 | Minimum time between motion triggers |
+| `hourly.video_duration` | 15.0 | Hourly scheduled recording length (seconds) |
+| `hourly.minute` | 0 | Minute of hour for scheduled capture |
+| `interval.video_duration` | 7.0 | Interval capture duration (seconds) |
+| `interval.zoom_levels` | [1.0, 2.0] | Zoom levels for interval captures |
+| `camera.resolution` | [1280, 720] | Video resolution |
+| `camera.framerate` | 30 | Video framerate |
+| `camera.zoom_level` | 1.0 | Default digital zoom (1.0-10.0x) |
+| `camera.autofocus` | true | Enable continuous autofocus |
+
+### Zoom and Focus Control
+
+The Camera Module 3 supports digital zoom and autofocus. Configure in your service setup:
+
+```python
+config = CaptureServiceConfig(
+    video_output_dir=Path("data/videos"),
+    zoom_level=2.0,      # 2x digital zoom
+    autofocus=True,      # Enable continuous autofocus
+)
+```
+
+Or control at runtime:
+
+```python
+# Digital zoom (1.0 = no zoom, up to 10.0x)
+service._camera.set_zoom(3.0)
+service._camera.reset_zoom()
+
+# Autofocus
+service._camera.set_autofocus(True)   # Continuous autofocus
+service._camera.set_autofocus(False)  # Disable autofocus
+
+# Manual focus (distance in metres)
+service._camera.set_manual_focus(5.0)   # Focus at 5 metres
+service._camera.set_manual_focus(0.0)   # Focus at infinity
+```
+
+**Note:** Higher zoom levels crop the sensor image and upscale it. For best quality, keep zoom ≤ 2x when using 1080p output resolution.
 
 ## Project Structure
 

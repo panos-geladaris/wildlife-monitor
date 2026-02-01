@@ -6,28 +6,13 @@ import logging
 import threading
 from pathlib import Path
 from typing import Callable, Optional
-from dataclasses import dataclass
 
 from .motion_detector import MotionDetector, MotionEvent
 from .camera import Camera, CaptureReason, VideoMetadata
 from .scheduler import CaptureScheduler
+from .config import CaptureServiceConfig, load_config
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class CaptureServiceConfig:
-    """Configuration for the capture service."""
-    video_output_dir: Path
-    gpio_pin: int = 17
-    video_duration: float = 2.0
-    resolution: tuple[int, int] = (1280, 720)
-    framerate: int = 30
-    cooldown_seconds: float = 5.0
-    hourly_capture_minute: int = 0
-    simulation_mode: bool = False
-    zoom_level: float = 1.0
-    autofocus: bool = True
 
 
 class CaptureService:
@@ -61,6 +46,7 @@ class CaptureService:
         )
         
         self._scheduler = CaptureScheduler()
+        self._interval_scheduler = CaptureScheduler()
         
         self._on_capture_callback: Optional[Callable[[VideoMetadata], None]] = None
         self._motion_thread: Optional[threading.Thread] = None
@@ -71,6 +57,7 @@ class CaptureService:
     def _setup_callbacks(self) -> None:
         self._motion_detector.on_motion(self._handle_motion)
         self._scheduler.set_capture_callback(self._handle_scheduled_capture)
+        self._interval_scheduler.set_capture_callback(self._handle_interval_capture)
     
     def on_capture(self, callback: Callable[[VideoMetadata], None]) -> None:
         """
@@ -91,12 +78,33 @@ class CaptureService:
             logger.error(f"Motion capture failed: {e}")
     
     def _handle_scheduled_capture(self) -> None:
-        """Handle scheduled capture."""
+        """Handle hourly scheduled capture."""
         try:
-            metadata = self._camera.capture_scheduled()
+            metadata = self._camera.capture_video(
+                duration=self.config.scheduled_video_duration,
+                reason=CaptureReason.SCHEDULED
+            )
             self._notify_capture(metadata)
         except Exception as e:
             logger.error(f"Scheduled capture failed: {e}")
+    
+    def _handle_interval_capture(self) -> None:
+        """Handle 15-minute interval captures with multiple zoom levels."""
+        original_zoom = self._camera.get_zoom()
+        
+        for zoom_level in self.config.interval_capture_zoom_levels:
+            try:
+                self._camera.set_zoom(zoom_level)
+                logger.info(f"Interval capture at {zoom_level}x zoom")
+                metadata = self._camera.capture_video(
+                    duration=self.config.interval_capture_duration,
+                    reason=CaptureReason.SCHEDULED
+                )
+                self._notify_capture(metadata)
+            except Exception as e:
+                logger.error(f"Interval capture at {zoom_level}x failed: {e}")
+        
+        self._camera.set_zoom(original_zoom)
     
     def _notify_capture(self, metadata: VideoMetadata) -> None:
         """Notify callback of new capture."""
@@ -114,9 +122,14 @@ class CaptureService:
         
         self._running = True
         
-        # Start scheduled captures
+        # Start hourly scheduled captures
         self._scheduler.schedule_hourly(minute=self.config.hourly_capture_minute)
         self._scheduler.start()
+        
+        # Start 15-minute interval captures with zoom comparison
+        if self.config.interval_capture_enabled:
+            self._interval_scheduler.schedule_interval(minutes=self.config.interval_capture_minutes)
+            self._interval_scheduler.start()
         
         # Start motion detection in background thread
         self._motion_thread = threading.Thread(
@@ -206,29 +219,31 @@ def _wait_for_exit():
 
 
 if __name__ == "__main__":
+    import os
+    import sys
+    
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     
-    import os
+    # Load config from file (or use --config path)
+    config_path = None
+    if len(sys.argv) > 1 and sys.argv[1] == "--config":
+        config_path = Path(sys.argv[2])
     
-    # Auto-detect: use simulation mode unless on Pi (or set SIMULATE=0 to force real hardware)
+    config = load_config(config_path)
+    
+    # Auto-detect simulation mode unless on Pi (or set SIMULATE env var)
     simulate = os.environ.get("SIMULATE", "auto")
     if simulate == "auto":
         try:
             import RPi.GPIO
-            simulation_mode = False
+            config.simulation_mode = False
         except ImportError:
-            simulation_mode = True
+            config.simulation_mode = True
     else:
-        simulation_mode = simulate == "1"
-    
-    config = CaptureServiceConfig(
-        video_output_dir=Path(__file__).parent.parent.parent / "data" / "videos",
-        video_duration=2.5,
-        simulation_mode=simulation_mode
-    )
+        config.simulation_mode = simulate == "1"
     
     service = CaptureService(config)
     

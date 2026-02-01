@@ -16,9 +16,12 @@ def __getattr__(name: str):
     if name == "CaptureScheduler":
         from .scheduler import CaptureScheduler
         return CaptureScheduler
-    if name in ("CaptureService", "CaptureServiceConfig"):
-        from .capture_service import CaptureService, CaptureServiceConfig
-        return {"CaptureService": CaptureService, "CaptureServiceConfig": CaptureServiceConfig}[name]
+    if name == "CaptureService":
+        from .capture_service import CaptureService
+        return CaptureService
+    if name in ("CaptureServiceConfig", "load_config"):
+        from .config import CaptureServiceConfig, load_config
+        return {"CaptureServiceConfig": CaptureServiceConfig, "load_config": load_config}[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -32,4 +35,5 @@ __all__ = [
     "CaptureScheduler",
     "CaptureService",
     "CaptureServiceConfig",
+    "load_config",
 ]
