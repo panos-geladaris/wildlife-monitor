@@ -39,8 +39,8 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 | Module | Status | Description |
 |--------|--------|-------------|
 | `src/capture/` | ✅ Complete | Motion detection, camera control, scheduling |
+| `src/storage/` | ✅ Complete | SQLite database, video file management |
 | `src/analysis/` | 🔲 Planned | TorchVision animal classification |
-| `src/storage/` | 🔲 Planned | SQLite database for detections |
 | `src/web/` | 🔲 Planned | Flask web UI |
 
 ## Installation
@@ -242,6 +242,98 @@ service._camera.set_manual_focus(0.0)   # Focus at infinity
 
 **Note:** Higher zoom levels crop the sensor image and upscale it. For best quality, keep zoom ≤ 2x when using 1080p output resolution.
 
+## Storage Module
+
+The storage module provides SQLite database for detection metadata and video file management.
+
+### Database Setup
+
+The database is automatically created on first use at `data/wildlife.db`. No manual setup required.
+
+```python
+from src.storage import Database, Detection, VideoStore
+
+# Initialize database
+db = Database()  # Uses default path: data/wildlife.db
+
+# Add a detection record
+detection = Detection(
+    video_path="data/videos/motion_20240115_120000.mp4",
+    trigger_type="motion",
+)
+detection_id = db.add_detection(detection)
+
+# Update with analysis results
+db.update_detection(detection_id, animal_class="bird", confidence=0.92, analyzed=True)
+
+# Query detections
+recent = db.get_detections(trigger_type="motion", limit=10)
+unanalyzed = db.get_unanalyzed_detections()
+
+# Get daily summary
+summary = db.update_daily_summary()
+print(f"Today: {summary.total_detections} detections, animals: {summary.animal_counts}")
+```
+
+### Video Store
+
+```python
+from src.storage import VideoStore
+
+store = VideoStore()  # Uses default path: data/videos/
+
+# List videos
+videos = store.list_videos(trigger_type="motion", limit=20)
+
+# Get storage usage
+usage = store.get_storage_usage()
+print(f"Storage: {usage['total_mb']} MB, {usage['video_count']} videos")
+
+# Cleanup old videos (default: 30 days retention)
+deleted = store.cleanup_old_videos(retention_days=30)
+```
+
+### Database on Raspberry Pi
+
+SQLite works out of the box on Raspberry Pi OS. For better performance with SD cards:
+
+```bash
+# Ensure data directory exists with proper permissions
+mkdir -p ~/projects/wildlife-monitor/data
+chmod 755 ~/projects/wildlife-monitor/data
+
+# Optional: Mount a USB drive for video storage (recommended for longevity)
+# 1. Format USB drive as ext4
+# 2. Mount it:
+sudo mkdir -p /mnt/wildlife-data
+sudo mount /dev/sda1 /mnt/wildlife-data
+
+# 3. Update config.yaml to use USB storage:
+# output:
+#   video_dir: "/mnt/wildlife-data/videos"
+```
+
+**Tips for SD card longevity:**
+- Store videos on USB drive instead of SD card
+- Use `retention_days` to auto-delete old videos
+- Consider using a high-endurance SD card
+
+## Running Tests
+
+```bash
+# Install test dependencies
+pip install pytest
+
+# Run all tests
+pytest tests/
+
+# Run with verbose output
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_database.py
+```
+
 ## Project Structure
 
 ```
@@ -251,12 +343,20 @@ wildlife-monitor/
 │   │   ├── motion_detector.py  # PIR sensor monitoring
 │   │   ├── camera.py           # Video recording
 │   │   ├── scheduler.py        # Hourly captures
+│   │   ├── config.py           # Configuration loader
 │   │   └── capture_service.py  # Main orchestrator
+│   ├── storage/
+│   │   ├── database.py         # SQLite operations
+│   │   └── video_store.py      # Video file management
 │   ├── analysis/               # (planned) ML classification
-│   ├── storage/                # (planned) Database
 │   └── web/                    # (planned) Flask UI
+├── tests/
+│   ├── test_database.py
+│   └── test_video_store.py
 ├── data/
-│   └── videos/                 # Captured video clips
+│   ├── videos/                 # Captured video clips
+│   └── wildlife.db             # SQLite database
+├── config.yaml                 # Configuration file
 ├── requirements.txt
 └── README.md
 ```
