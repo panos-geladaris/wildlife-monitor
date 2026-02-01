@@ -72,12 +72,12 @@ Build a Raspberry Pi-based system to detect, record, and classify animals passin
 
 ---
 
-### 3. Storage Module 🔲
-**Status:** Planned
+### 3. Storage Module ✅
+**Status:** Complete
 
 **Components:**
-- `database.py` - SQLite database operations
-- `video_store.py` - Video file management
+- `database.py` - SQLite database operations (Detection, DailySummary)
+- `video_store.py` - Video file management (VideoStore)
 
 **Database Schema:**
 ```sql
@@ -102,10 +102,12 @@ CREATE TABLE daily_summary (
 ```
 
 **Features:**
-- Store detection metadata
-- Link to video files
-- Daily/weekly summaries
-- Cleanup old videos (configurable retention)
+- Store detection metadata with CRUD operations
+- Query detections by trigger type, date range, animal class
+- Daily summary generation with animal counts
+- Video file listing and metadata parsing
+- Automatic cleanup of old videos (configurable retention)
+- Storage usage statistics and disk space monitoring
 
 ---
 
@@ -144,7 +146,7 @@ GET  /api/status              - System status
 ## Implementation Order
 
 1. ✅ **Capture Module** - Motion detection, camera, scheduling
-2. 🔲 **Storage Module** - Database and video management
+2. ✅ **Storage Module** - Database and video management
 3. 🔲 **Analysis Module** - ML classification pipeline
 4. 🔲 **Web UI Module** - Flask app for viewing results
 5. 🔲 **Integration** - Connect all modules, main.py entry point
@@ -169,7 +171,11 @@ wildlife-monitor/
 │   │   ├── motion_detector.py
 │   │   ├── camera.py
 │   │   ├── scheduler.py
+│   │   ├── config.py
 │   │   └── capture_service.py
+│   ├── storage/           # ✅ Complete
+│   │   ├── database.py
+│   │   └── video_store.py
 │   ├── analysis/          # 🔲 Planned
 │   │   ├── model.py
 │   │   ├── classifier.py
