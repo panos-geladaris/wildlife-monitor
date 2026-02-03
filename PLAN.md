@@ -110,34 +110,50 @@ CREATE TABLE daily_summary (
 
 ---
 
-### 4. Web UI Module 🔲
-**Status:** Planned
+### 4. Web UI Module ✅
+**Status:** Complete
 
 **Components:**
-- `app.py` - Flask application
-- `templates/` - HTML templates
-- `static/` - CSS, JS assets
+- `app.py` - Flask application factory
+- `api.py` - REST API endpoints
+- `templates/` - HTML templates (base, index, gallery, detection, statistics)
+- `static/css/` - Custom styles
+- `static/js/` - Utility functions and auto-refresh
 
 **Pages:**
-- **Dashboard** - Live status, recent detections, daily summary
-- **Gallery** - Browse all videos with thumbnails
-- **Detection Details** - View video, classification results
-- **Statistics** - Charts showing detection trends over time
+- **Dashboard** (`/`) - Live status, recent detections, today's summary
+- **Gallery** (`/gallery`) - Browse all detections with filters and pagination
+- **Detection Details** (`/detection/:id`) - View video, classification results
+- **Statistics** (`/statistics`) - Charts showing detection trends over time
 
 **Features:**
-- Filter by animal type, date range, trigger type
-- Video playback
-- Daily/weekly detection charts
-- Mobile-responsive design
+- Filter by animal type, trigger type
+- Video playback with HTML5 player
+- Daily detection charts (Chart.js)
+- Animal breakdown charts
+- Mobile-responsive design (Bootstrap 5)
+- Auto-refresh dashboard (30s)
+- Loading states and error handling
 
 **API Endpoints:**
 ```
+GET  /api/status              - System status (storage, disk, counts)
 GET  /api/detections          - List detections (with filters)
 GET  /api/detections/:id      - Get single detection
-GET  /api/videos/:filename    - Serve video file
+GET  /api/videos              - List video files
 GET  /api/stats/daily         - Daily detection counts
 GET  /api/stats/animals       - Animal type breakdown
-GET  /api/status              - System status
+GET  /api/stats/summary       - Dashboard summary
+GET  /videos/:filename        - Serve video files
+```
+
+**Running the Web UI:**
+```bash
+# Development
+python -m src.web.app
+
+# Access at http://localhost:5001
+# On network: http://<raspberry-pi-ip>:5001
 ```
 
 ---
@@ -147,7 +163,7 @@ GET  /api/status              - System status
 1. ✅ **Capture Module** - Motion detection, camera, scheduling
 2. ✅ **Storage Module** - Database and video management
 3. ✅ **Analysis Module** - ML classification pipeline
-4. 🔲 **Web UI Module** - Flask app for viewing results
+4. ✅ **Web UI Module** - Flask app for viewing results
 5. 🔲 **Integration** - Connect all modules, main.py entry point
 6. 🔲 **Deployment** - Systemd service, auto-start on Pi
 
@@ -175,17 +191,25 @@ wildlife-monitor/
 │   ├── storage/           # ✅ Complete
 │   │   ├── database.py
 │   │   └── video_store.py
-│   ├── analysis/          # 🔲 Planned
+│   ├── analysis/          # ✅ Complete
 │   │   ├── model.py
 │   │   ├── classifier.py
 │   │   └── frame_extractor.py
-│   ├── storage/           # 🔲 Planned
+│   ├── storage/           # ✅ Complete
 │   │   ├── database.py
 │   │   └── video_store.py
-│   └── web/               # 🔲 Planned
+│   └── web/               # ✅ Complete
 │       ├── app.py
+│       ├── api.py
 │       ├── templates/
+│       │   ├── base.html
+│       │   ├── index.html
+│       │   ├── gallery.html
+│       │   ├── detection.html
+│       │   └── statistics.html
 │       └── static/
+│           ├── css/style.css
+│           └── js/app.js
 ├── data/
 │   ├── videos/
 │   └── wildlife.db
