@@ -158,13 +158,51 @@ python -m src.web.app
 
 ---
 
+### 5. Integration ✅
+**Status:** Complete
+
+**Components:**
+- `main.py` - Main entry point that orchestrates all modules
+
+**Features:**
+- Full system integration (capture → analysis → storage → web)
+- Multiple run modes:
+  - Full system: `python main.py`
+  - Capture only: `python main.py --capture-only`
+  - Web only: `python main.py --web-only`
+  - Analyze single video: `python main.py --analyze video.mp4`
+- Auto-detection of simulation mode (Pi hardware vs development)
+- Configurable via command-line arguments and config.yaml
+- Graceful shutdown with Ctrl+C
+- Background ML analysis of captured videos
+- Automatic database updates on new captures
+
+**Command-line Options:**
+```
+python main.py [OPTIONS]
+
+Options:
+  --config PATH       Path to config.yaml file
+  --video-dir PATH    Directory for video files (default: data/videos)
+  --db-path PATH      Path to SQLite database (default: data/wildlife.db)
+  --port PORT         Web UI port (default: 5001)
+  --capture-only      Run capture service without web UI
+  --web-only          Run web UI only (no capture)
+  --no-analysis       Disable ML analysis (just record videos)
+  --simulate          Force simulation mode (no Pi hardware required)
+  --analyze VIDEO     Analyze a single video file and exit
+  -v, --verbose       Enable verbose logging
+```
+
+---
+
 ## Implementation Order
 
 1. ✅ **Capture Module** - Motion detection, camera, scheduling
 2. ✅ **Storage Module** - Database and video management
 3. ✅ **Analysis Module** - ML classification pipeline
 4. ✅ **Web UI Module** - Flask app for viewing results
-5. 🔲 **Integration** - Connect all modules, main.py entry point
+5. ✅ **Integration** - Connect all modules, main.py entry point
 6. 🔲 **Deployment** - Systemd service, auto-start on Pi
 
 ## Technical Decisions
@@ -215,7 +253,7 @@ wildlife-monitor/
 │   └── wildlife.db
 ├── models/
 │   └── (pretrained weights)
-├── main.py                # Entry point
+├── main.py                # Main entry point (integration)
 ├── requirements.txt
 ├── requirements-pi.txt
 ├── README.md
