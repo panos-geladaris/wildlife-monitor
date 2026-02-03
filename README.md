@@ -41,7 +41,7 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 | `src/capture/` | ✅ Complete | Motion detection, camera control, scheduling |
 | `src/storage/` | ✅ Complete | SQLite database, video file management |
 | `src/analysis/` | ✅ Complete | TorchVision animal classification |
-| `src/web/` | 🔲 Planned | Flask web UI |
+| `src/web/` | ✅ Complete | Flask web UI for viewing results |
 
 ## Installation
 
@@ -373,6 +373,80 @@ pip install opencv-python-headless  # Headless version for Pi
 
 **Note:** Model inference on Pi 4 takes ~1-2 seconds per frame with MobileNetV3.
 
+## Web UI
+
+The web UI provides a browser-based interface to view detections and statistics.
+
+### Running the Web UI
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Start the web server
+python -m src.web.app
+
+# Server runs on http://localhost:5001
+```
+
+### Accessing the Web UI
+
+**On the same machine:**
+- Open http://localhost:5001
+
+**From another device on the network:**
+1. Find the Raspberry Pi's IP address:
+   ```bash
+   hostname -I
+   # Example output: 192.168.1.50
+   ```
+2. Open http://192.168.1.50:5001 in your browser
+
+**Pages:**
+| Page | URL | Description |
+|------|-----|-------------|
+| Dashboard | `/` | System status, today's summary, recent detections |
+| Gallery | `/gallery` | Browse all detections with filters |
+| Detection | `/detection/:id` | View video and classification results |
+| Statistics | `/statistics` | Charts of detection trends |
+
+### API Endpoints
+
+The web UI also exposes a REST API:
+
+```
+GET /api/status           - System status (storage, counts)
+GET /api/detections       - List detections (with filters)
+GET /api/detections/:id   - Single detection details
+GET /api/videos           - List video files
+GET /api/stats/daily      - Daily detection counts
+GET /api/stats/animals    - Animal type breakdown
+GET /api/stats/summary    - Dashboard summary
+```
+
+**Example API usage:**
+```bash
+# Get system status
+curl http://localhost:5001/api/status
+
+# Get recent motion detections
+curl "http://localhost:5001/api/detections?trigger_type=motion&limit=10"
+
+# Get last 7 days of stats
+curl "http://localhost:5001/api/stats/daily?days=7"
+```
+
+### Running in Production
+
+For production on Raspberry Pi, consider using Gunicorn:
+
+```bash
+pip install gunicorn
+
+# Run with 2 workers
+gunicorn -w 2 -b 0.0.0.0:5001 "src.web.app:create_app()"
+```
+
 ## Running Tests
 
 ```bash
@@ -408,11 +482,16 @@ wildlife-monitor/
 │   │   ├── model.py            # TorchVision model loading
 │   │   ├── classifier.py       # Animal classification
 │   │   └── frame_extractor.py  # Video frame extraction
-│   └── web/                    # (planned) Flask UI
+│   └── web/                    # Flask web UI
+│       ├── app.py              # Flask application factory
+│       ├── api.py              # REST API endpoints
+│       ├── templates/          # HTML templates
+│       └── static/             # CSS, JS assets
 ├── tests/
 │   ├── test_database.py
 │   ├── test_video_store.py
-│   └── test_analysis.py
+│   ├── test_analysis.py
+│   └── test_web.py
 ├── data/
 │   ├── videos/                 # Captured video clips
 │   └── wildlife.db             # SQLite database

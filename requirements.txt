@@ -10,6 +10,11 @@ PyYAML>=6.0
 pytest>=7.0.0
 
 # ML dependencies (required for analysis module)
-torch>=2.0.0
-torchvision>=0.15.0
-opencv-python>=4.8.0
+# Note: On Raspberry Pi, install torch separately with:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# torch>=2.0.0
+# torchvision>=0.15.0
+opencv-python-headless>=4.8.0  # Headless version for Pi
+
+# Numpy - use system version on Pi to avoid picamera2 conflicts
+# pip install numpy==$(python3 -c "import numpy; print(numpy.__version__)")
