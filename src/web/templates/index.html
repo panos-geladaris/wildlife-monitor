@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Wildlife Monitor{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Dashboard</h1>
+
+<div class="row g-4">
+    <!-- System Status -->
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">System Status</div>
+            <div class="card-body" id="status-card">
+                <div class="text-center text-muted py-3">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Summary -->
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">Today's Summary</div>
+            <div class="card-body" id="summary-card">
+                <div class="text-center text-muted py-3">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Animal Breakdown -->
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">Today's Animals</div>
+            <div class="card-body" id="animals-card">
+                <div class="text-center text-muted py-3">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Detections -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">Recent Detections</div>
+            <div class="card-body" id="recent-card">
+                <div class="text-center text-muted py-3">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadStatus() {
+    const card = document.getElementById('status-card');
+    try {
+        const response = await fetch('/api/status');
+        const data = await response.json();
+        
+        if (data.error) throw new Error(data.error);
+        
+        card.innerHTML = `
+            <div class="mb-2">
+                <span class="badge bg-success">Running</span>
+            </div>
+            <ul class="list-unstyled mb-0">
+                <li><strong>Videos:</strong> ${data.storage.video_count} (${data.storage.videos_mb.toFixed(1)} MB)</li>
+                <li><strong>Disk Free:</strong> ${data.storage.disk_free_gb.toFixed(1)} GB</li>
+                <li><strong>Total Detections:</strong> ${data.detections.total}</li>
+                <li><strong>Last Hour:</strong> ${data.detections.last_hour}</li>
+            </ul>
+        `;
+    } catch (error) {
+        card.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
+    }
+}
+
+async function loadSummary() {
+    const summaryCard = document.getElementById('summary-card');
+    const animalsCard = document.getElementById('animals-card');
+    const recentCard = document.getElementById('recent-card');
+    
+    try {
+        const response = await fetch('/api/stats/summary');
+        const data = await response.json();
+        
+        if (data.error) throw new Error(data.error);
+        
+        // Today's summary
+        const scheduled = data.today.total - data.today.motion;
+        summaryCard.innerHTML = `
+            <h3 class="mb-3">${data.today.total}</h3>
+            <p class="text-muted mb-2">Total detections today</p>
+            <ul class="list-unstyled mb-0">
+                <li><strong>Motion:</strong> ${data.today.motion}</li>
+                <li><strong>Scheduled:</strong> ${scheduled}</li>
+            </ul>
+        `;
+        
+        // Animal breakdown
+        const animals = Object.entries(data.today.animals);
+        if (animals.length === 0) {
+            animalsCard.innerHTML = '<p class="text-muted mb-0">No animals detected today</p>';
+        } else {
+            const animalList = animals
+                .sort((a, b) => b[1] - a[1])
+                .map(([animal, count]) => `<li><strong>${animal}:</strong> ${count}</li>`)
+                .join('');
+            animalsCard.innerHTML = `<ul class="list-unstyled mb-0">${animalList}</ul>`;
+        }
+        
+        // Recent detections
+        if (data.recent_detections.length === 0) {
+            recentCard.innerHTML = '<p class="text-muted mb-0">No recent detections</p>';
+        } else {
+            const rows = data.recent_detections.map(d => {
+                const time = new Date(d.timestamp).toLocaleString();
+                const animal = d.animal_class || '-';
+                const confidence = d.confidence ? `${(d.confidence * 100).toFixed(0)}%` : '-';
+                return `
+                    <tr>
+                        <td><a href="/detection/${d.id}">#${d.id}</a></td>
+                        <td>${time}</td>
+                        <td>${d.trigger_type}</td>
+                        <td>${animal}</td>
+                        <td>${confidence}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            recentCard.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Time</th>
+                                <th>Trigger</th>
+                                <th>Animal</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        }
+    } catch (error) {
+        summaryCard.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
+        animalsCard.innerHTML = `<div class="text-danger">Error loading data</div>`;
+        recentCard.innerHTML = `<div class="text-danger">Error loading data</div>`;
+    }
+}
+
+async function refreshData() {
+    await Promise.all([loadStatus(), loadSummary()]);
+}
+
+// Initial load
+refreshData();
+
+// Auto-refresh every 30 seconds
+setInterval(refreshData, 30000);
+</script>
+{% endblock %}
