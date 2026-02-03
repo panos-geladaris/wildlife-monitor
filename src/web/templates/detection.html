@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Detection Details - Wildlife Monitor{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="/gallery" class="btn btn-outline-secondary">&larr; Back to Gallery</a>
+</div>
+
+<div id="loadingSpinner" class="text-center my-5">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
+<div id="errorMessage" class="alert alert-danger d-none" role="alert">
+    Detection not found.
+</div>
+
+<div id="detectionContent" class="d-none">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-body p-0">
+                    <video id="detectionVideo" class="w-100" controls>
+                        <source id="videoSource" src="" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Detection Details</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless mb-0">
+                        <tbody>
+                            <tr>
+                                <th scope="row" class="text-muted">ID</th>
+                                <td id="detectionId"></td>
+                            </tr>
+                            <tr>
+                                <th scope="row" class="text-muted">Timestamp</th>
+                                <td id="detectionTimestamp"></td>
+                            </tr>
+                            <tr>
+                                <th scope="row" class="text-muted">Trigger Type</th>
+                                <td id="detectionTrigger"></td>
+                            </tr>
+                            <tr>
+                                <th scope="row" class="text-muted">Analyzed</th>
+                                <td id="detectionAnalyzed"></td>
+                            </tr>
+                            <tr id="animalRow" class="d-none">
+                                <th scope="row" class="text-muted">Animal Detected</th>
+                                <td id="detectionAnimal"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const detectionId = "{{ detection_id }}";
+
+function getTriggerBadgeClass(triggerType) {
+    switch (triggerType) {
+        case 'motion': return 'bg-success';
+        case 'scheduled': return 'bg-primary';
+        case 'manual': return 'bg-secondary';
+        default: return 'bg-secondary';
+    }
+}
+
+function formatTimestamp(timestamp) {
+    return new Date(timestamp).toLocaleString();
+}
+
+async function loadDetection() {
+    const spinner = document.getElementById('loadingSpinner');
+    const content = document.getElementById('detectionContent');
+    const errorMsg = document.getElementById('errorMessage');
+    
+    try {
+        const response = await fetch(`/api/detections/${detectionId}`);
+        
+        if (!response.ok) {
+            throw new Error('Detection not found');
+        }
+        
+        const detection = await response.json();
+        
+        document.getElementById('videoSource').src = `/videos/${detection.video_filename}`;
+        document.getElementById('detectionVideo').load();
+        
+        document.getElementById('detectionId').textContent = detection.id;
+        document.getElementById('detectionTimestamp').textContent = formatTimestamp(detection.timestamp);
+        
+        const triggerBadge = `<span class="badge ${getTriggerBadgeClass(detection.trigger_type)}">${detection.trigger_type}</span>`;
+        document.getElementById('detectionTrigger').innerHTML = triggerBadge;
+        
+        const analyzedBadge = detection.analyzed 
+            ? '<span class="badge bg-success">Yes</span>' 
+            : '<span class="badge bg-secondary">No</span>';
+        document.getElementById('detectionAnalyzed').innerHTML = analyzedBadge;
+        
+        if (detection.animal_class) {
+            const confidence = detection.confidence 
+                ? ` (${(detection.confidence * 100).toFixed(1)}% confidence)` 
+                : '';
+            document.getElementById('detectionAnimal').textContent = detection.animal_class + confidence;
+            document.getElementById('animalRow').classList.remove('d-none');
+        }
+        
+        spinner.classList.add('d-none');
+        content.classList.remove('d-none');
+        
+    } catch (error) {
+        console.error('Error loading detection:', error);
+        spinner.classList.add('d-none');
+        errorMsg.classList.remove('d-none');
+    }
+}
+
+loadDetection();
+</script>
+{% endblock %}
