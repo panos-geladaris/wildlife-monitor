@@ -69,6 +69,63 @@ pip install picamera2 RPi.GPIO
 pip install torch torchvision
 ```
 
+## Quick Start
+
+### Running the Full System
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run the complete wildlife monitor
+python main.py
+
+# The system will:
+# - Start motion detection and scheduled captures
+# - Analyze videos with ML classification
+# - Store results in the database
+# - Serve web UI at http://localhost:5001
+```
+
+Press `Ctrl+C` to stop.
+
+### Run Modes
+
+```bash
+# Full system (capture + analysis + web)
+python main.py
+
+# Capture only (no web UI)
+python main.py --capture-only
+
+# Web UI only (view existing data)
+python main.py --web-only
+
+# Analyze a single video
+python main.py --analyze data/videos/motion_20240115_120000.mp4
+
+# Force simulation mode (development without Pi hardware)
+python main.py --simulate
+
+# Custom port and paths
+python main.py --port 8080 --video-dir /mnt/usb/videos --db-path /mnt/usb/wildlife.db
+```
+
+### Command-Line Options
+
+| Option | Description |
+|--------|-------------|
+| `--config PATH` | Path to config.yaml file |
+| `--video-dir PATH` | Directory for video files (default: data/videos) |
+| `--db-path PATH` | Path to SQLite database (default: data/wildlife.db) |
+| `--port PORT` | Web UI port (default: 5001) |
+| `--capture-only` | Run capture service without web UI |
+| `--web-only` | Run web UI only (no capture) |
+| `--no-analysis` | Disable ML analysis (just record videos) |
+| `--simulate` | Force simulation mode (no Pi hardware required) |
+| `--analyze VIDEO` | Analyze a single video file and exit |
+| `-v, --verbose` | Enable verbose logging |
+
 ## Running on Raspberry Pi
 
 ```bash
@@ -79,11 +136,11 @@ source venv/bin/activate
 pip install -r requirements.txt
 pip install -r requirements-pi.txt
 
-# Run the capture service
-python -m src.capture.capture_service
+# Run the full system
+python main.py
 ```
 
-The service will start monitoring the PIR sensor and capturing video on motion detection.
+The system will auto-detect Pi hardware and run with real camera and PIR sensor.
 
 ## Running the Capture Module
 
@@ -491,10 +548,12 @@ wildlife-monitor/
 │   ├── test_database.py
 │   ├── test_video_store.py
 │   ├── test_analysis.py
-│   └── test_web.py
+│   ├── test_web.py
+│   └── test_integration.py
 ├── data/
 │   ├── videos/                 # Captured video clips
 │   └── wildlife.db             # SQLite database
+├── main.py                     # Main entry point
 ├── config.yaml                 # Configuration file
 ├── requirements.txt
 └── README.md
