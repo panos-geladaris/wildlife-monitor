@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Statistics - Wildlife Monitor{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Detection Statistics</h1>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Total Detections</h5>
+                <p class="display-4" id="totalDetections">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Most Common Animal</h5>
+                <p class="display-4" id="mostCommonAnimal">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Motion vs Scheduled</h5>
+                <p class="display-4" id="motionRatio">-</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Daily Detections</span>
+                <select class="form-select form-select-sm w-auto" id="dailyDaysSelect">
+                    <option value="7" selected>Last 7 days</option>
+                    <option value="14">Last 14 days</option>
+                    <option value="30">Last 30 days</option>
+                </select>
+            </div>
+            <div class="card-body">
+                <canvas id="dailyChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Animal Breakdown</span>
+                <select class="form-select form-select-sm w-auto" id="animalDaysSelect">
+                    <option value="7">Last 7 days</option>
+                    <option value="14">Last 14 days</option>
+                    <option value="30" selected>Last 30 days</option>
+                </select>
+            </div>
+            <div class="card-body">
+                <canvas id="animalChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let dailyChart = null;
+let animalChart = null;
+
+const chartColors = [
+    '#4dc9f6', '#f67019', '#f53794', '#537bc4', '#acc236',
+    '#166a8f', '#00a950', '#58595b', '#8549ba', '#ff6384'
+];
+
+async function fetchDailyStats(days) {
+    try {
+        const response = await fetch(`/api/stats/daily?days=${days}`);
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error fetching daily stats:', error);
+        return null;
+    }
+}
+
+async function fetchAnimalStats(days) {
+    try {
+        const response = await fetch(`/api/stats/animals?days=${days}`);
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error fetching animal stats:', error);
+        return null;
+    }
+}
+
+function updateDailyChart(data) {
+    const ctx = document.getElementById('dailyChart').getContext('2d');
+    
+    if (dailyChart) {
+        dailyChart.destroy();
+    }
+
+    const labels = data.map(d => d.date);
+    const totalData = data.map(d => d.total || 0);
+    const motionData = data.map(d => d.motion || 0);
+    const scheduledData = data.map(d => d.scheduled || 0);
+
+    dailyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Total',
+                    data: totalData,
+                    backgroundColor: '#4dc9f6'
+                },
+                {
+                    label: 'Motion',
+                    data: motionData,
+                    backgroundColor: '#f67019'
+                },
+                {
+                    label: 'Scheduled',
+                    data: scheduledData,
+                    backgroundColor: '#537bc4'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    const total = totalData.reduce((a, b) => a + b, 0);
+    const motionTotal = motionData.reduce((a, b) => a + b, 0);
+    const scheduledTotal = scheduledData.reduce((a, b) => a + b, 0);
+    
+    document.getElementById('totalDetections').textContent = total;
+    
+    if (motionTotal + scheduledTotal > 0) {
+        const ratio = Math.round((motionTotal / (motionTotal + scheduledTotal)) * 100);
+        document.getElementById('motionRatio').textContent = `${ratio}%`;
+    } else {
+        document.getElementById('motionRatio').textContent = '-';
+    }
+}
+
+function updateAnimalChart(data) {
+    const ctx = document.getElementById('animalChart').getContext('2d');
+    
+    if (animalChart) {
+        animalChart.destroy();
+    }
+
+    const labels = Object.keys(data);
+    const counts = Object.values(data);
+
+    animalChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: counts,
+                backgroundColor: chartColors.slice(0, labels.length)
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+
+    if (labels.length > 0) {
+        const maxIndex = counts.indexOf(Math.max(...counts));
+        document.getElementById('mostCommonAnimal').textContent = labels[maxIndex];
+    } else {
+        document.getElementById('mostCommonAnimal').textContent = '-';
+    }
+}
+
+async function loadDailyStats() {
+    const days = document.getElementById('dailyDaysSelect').value;
+    const data = await fetchDailyStats(days);
+    if (data) {
+        updateDailyChart(data);
+    }
+}
+
+async function loadAnimalStats() {
+    const days = document.getElementById('animalDaysSelect').value;
+    const data = await fetchAnimalStats(days);
+    if (data) {
+        updateAnimalChart(data);
+    }
+}
+
+document.getElementById('dailyDaysSelect').addEventListener('change', loadDailyStats);
+document.getElementById('animalDaysSelect').addEventListener('change', loadAnimalStats);
+
+loadDailyStats();
+loadAnimalStats();
+</script>
+{% endblock %}
