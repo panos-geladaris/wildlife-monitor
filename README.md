@@ -418,15 +418,25 @@ for r in all_results:
 
 ### ML Dependencies on Raspberry Pi
 
-PyTorch on Raspberry Pi requires special installation:
+PyTorch on Raspberry Pi requires special installation (standard pip packages cause "Illegal instruction" errors):
 
 ```bash
-# Install PyTorch for ARM (Pi 4)
+# Option 1: PyTorch CPU wheels (recommended for Pi 4 64-bit)
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Option 2: Use piwheels (pre-built for Pi)
+pip install torch torchvision --extra-index-url https://www.piwheels.org/simple
 
 # Install OpenCV
 pip install opencv-python-headless  # Headless version for Pi
 ```
+
+**If PyTorch installation fails**, run without ML analysis:
+```bash
+python main.py --no-analysis
+```
+
+The system will still capture videos and serve the web UI - classification can be added later.
 
 **Note:** Model inference on Pi 4 takes ~1-2 seconds per frame with MobileNetV3.
 

@@ -103,6 +103,10 @@ class WildlifeMonitor:
             logger.warning(f"ML dependencies not available: {e}")
             logger.warning("Running without animal classification")
             self._classifier = None
+        except Exception as e:
+            logger.warning(f"Failed to initialize classifier: {e}")
+            logger.warning("Running without animal classification")
+            self._classifier = None
     
     def _init_capture_service(self) -> None:
         """Initialize the capture service."""

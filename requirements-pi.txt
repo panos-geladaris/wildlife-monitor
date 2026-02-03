@@ -5,3 +5,19 @@
 picamera2>=0.3.17
 libcamera>=0.0.5
 RPi.GPIO>=0.7.1
+
+# PyTorch for Raspberry Pi
+# --------------------------
+# Standard pip packages don't work on Pi (causes "Illegal instruction" error).
+# 
+# Option 1: Install from PyTorch CPU wheels (recommended for Pi 4 64-bit)
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#
+# Option 2: Use piwheels (pre-built for Pi)
+#   pip install torch torchvision --extra-index-url https://www.piwheels.org/simple
+#
+# Option 3: Skip ML analysis entirely
+#   python main.py --no-analysis
+#
+# Note: Model inference on Pi 4 takes ~1-2 seconds per frame with MobileNetV3.
+# If PyTorch installation fails, the system will still work without ML classification.
