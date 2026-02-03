@@ -2,21 +2,21 @@
 
 # Motion-triggered captures
 motion:
-  video_duration: 2.5        # Duration in seconds
+  video_duration: 5.0        # Duration in seconds
   cooldown_seconds: 5.0      # Minimum time between triggers
 
 # Hourly scheduled captures
 hourly:
   enabled: true
   minute: 0                  # Minute of each hour (0-59)
-  video_duration: 15.0       # Duration in seconds
+  video_duration: 5.0       # Duration in seconds
 
 # 15-minute interval captures (with zoom comparison)
 interval:
   enabled: true
   minutes: 15                # Interval in minutes
-  video_duration: 7.0        # Duration in seconds
-  zoom_levels: [1.0, 2.0]    # Capture at each zoom level
+  video_duration: 5.0        # Duration in seconds
+  zoom_levels: [1.0]    # Capture at each zoom level
 
 # Camera settings
 camera:
