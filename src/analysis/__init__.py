@@ -1,7 +1,8 @@
 """
 Analysis module for wildlife monitor.
 
-Provides ML-based animal classification using TorchVision models.
+Provides ML-based animal classification using ONNX Runtime (preferred)
+or TorchVision models as a fallback.
 """
 
 
