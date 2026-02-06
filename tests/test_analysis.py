@@ -2,6 +2,7 @@
 
 import pytest
 import tempfile
+import numpy as np
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from PIL import Image
@@ -10,6 +11,8 @@ from src.analysis.model import (
     ModelLoader,
     IMAGENET_TO_ANIMAL,
     ANIMAL_CLASSES,
+    _imagenet_preprocess,
+    _softmax,
 )
 from src.analysis.classifier import AnimalClassifier, ClassificationResult
 from src.analysis.frame_extractor import FrameExtractor, ExtractedFrame
@@ -90,45 +93,111 @@ class TestClassificationResult:
 class TestModelLoader:
     """Tests for ModelLoader class."""
     
-    @pytest.fixture
-    def mock_torch(self):
-        """Mock torch and torchvision modules."""
-        with patch("src.analysis.model.torch") as mock_torch, \
-             patch("src.analysis.model.models") as mock_models:
-            
-            # Mock CUDA availability
-            mock_torch.cuda.is_available.return_value = False
-            
-            # Mock model
-            mock_model = MagicMock()
-            mock_models.mobilenet_v3_small.return_value = mock_model
-            mock_models.MobileNet_V3_Small_Weights.IMAGENET1K_V1 = MagicMock()
-            
-            yield mock_torch, mock_models
-    
     def test_init_default_device_cpu(self):
         """Test default device selection on CPU."""
-        with patch("src.analysis.model.torch") as mock_torch:
-            mock_torch.cuda.is_available.return_value = False
-            
+        with patch("src.analysis.model._torch_available", return_value=True), \
+             patch("src.analysis.model._onnx_available", return_value=False):
             loader = ModelLoader()
             assert loader.device == "cpu"
     
     def test_init_custom_model_name(self):
         """Test custom model name."""
-        with patch("src.analysis.model.torch") as mock_torch:
-            mock_torch.cuda.is_available.return_value = False
-            
+        with patch("src.analysis.model._torch_available", return_value=True), \
+             patch("src.analysis.model._onnx_available", return_value=False):
             loader = ModelLoader(model_name="resnet18")
             assert loader.model_name == "resnet18"
     
     def test_init_custom_device(self):
         """Test custom device selection."""
-        with patch("src.analysis.model.torch") as mock_torch:
-            mock_torch.cuda.is_available.return_value = False
-            
+        with patch("src.analysis.model._torch_available", return_value=True), \
+             patch("src.analysis.model._onnx_available", return_value=False):
             loader = ModelLoader(device="cpu")
             assert loader.device == "cpu"
+    
+    def test_backend_auto_prefers_onnx(self):
+        """Test that auto backend prefers ONNX when available."""
+        with patch("src.analysis.model._onnx_available", return_value=True), \
+             tempfile.NamedTemporaryFile(suffix=".onnx", delete=False) as f:
+            onnx_path = Path(f.name)
+            try:
+                loader = ModelLoader(onnx_model_path=onnx_path)
+                assert loader.backend == "onnx"
+            finally:
+                onnx_path.unlink(missing_ok=True)
+    
+    def test_backend_auto_falls_back_to_torch(self):
+        """Test that auto backend falls back to torch when ONNX unavailable."""
+        with patch("src.analysis.model._onnx_available", return_value=False), \
+             patch("src.analysis.model._torch_available", return_value=True):
+            loader = ModelLoader()
+            assert loader.backend == "torch"
+    
+    def test_backend_auto_no_backend_raises(self):
+        """Test that auto backend raises when no backend is available."""
+        with patch("src.analysis.model._onnx_available", return_value=False), \
+             patch("src.analysis.model._torch_available", return_value=False):
+            with pytest.raises(RuntimeError):
+                ModelLoader()
+    
+    def test_backend_explicit_onnx_missing_file(self):
+        """Test that explicit ONNX backend raises for missing file."""
+        with patch("src.analysis.model._onnx_available", return_value=True):
+            with pytest.raises(FileNotFoundError):
+                ModelLoader(backend="onnx", onnx_model_path=Path("/nonexistent/model.onnx"))
+    
+    def test_backend_explicit_torch_unavailable(self):
+        """Test that explicit torch backend raises when torch unavailable."""
+        with patch("src.analysis.model._torch_available", return_value=False):
+            with pytest.raises(RuntimeError):
+                ModelLoader(backend="torch")
+
+
+class TestImageNetPreprocess:
+    """Tests for _imagenet_preprocess function."""
+    
+    def test_output_shape(self):
+        """Test that output has correct shape."""
+        result = _imagenet_preprocess(Image.new("RGB", (640, 480)))
+        assert result.shape == (1, 3, 224, 224)
+    
+    def test_output_dtype(self):
+        """Test that output dtype is float32."""
+        result = _imagenet_preprocess(Image.new("RGB", (640, 480)))
+        assert result.dtype == np.float32
+    
+    def test_normalization_black_image(self):
+        """Test normalization values for an all-black image."""
+        image = Image.new("RGB", (224, 224), color=(0, 0, 0))
+        result = _imagenet_preprocess(image)
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        expected = -mean / std
+        for c in range(3):
+            np.testing.assert_allclose(result[0, c, 112, 112], expected[c], atol=0.01)
+    
+    def test_non_square_image(self):
+        """Test that non-square images produce correct output shape."""
+        result = _imagenet_preprocess(Image.new("RGB", (300, 100)))
+        assert result.shape == (1, 3, 224, 224)
+
+
+class TestSoftmax:
+    """Tests for _softmax function."""
+    
+    def test_softmax_uniform(self):
+        """Test that uniform input gives uniform output."""
+        result = _softmax(np.zeros(10))
+        np.testing.assert_allclose(result, 0.1, atol=1e-7)
+    
+    def test_softmax_sums_to_one(self):
+        """Test that softmax output sums to 1."""
+        result = _softmax(np.array([1.0, 2.0, 3.0, 4.0]))
+        np.testing.assert_allclose(result.sum(), 1.0, atol=1e-7)
+    
+    def test_softmax_peak(self):
+        """Test that softmax peak is at the correct index."""
+        result = _softmax(np.array([10.0, 0.0, 0.0]))
+        assert np.argmax(result) == 0
 
 
 class TestAnimalClassifier:
@@ -137,13 +206,12 @@ class TestAnimalClassifier:
     @pytest.fixture
     def mock_classifier(self):
         """Create a classifier with mocked model."""
-        with patch.object(ModelLoader, "load") as mock_load, \
+        with patch("src.analysis.model._torch_available", return_value=True), \
+             patch("src.analysis.model._onnx_available", return_value=False), \
+             patch.object(ModelLoader, "load") as mock_load, \
              patch.object(ModelLoader, "predict_top_k") as mock_predict:
             
-            # Mock model loading
             mock_load.return_value = MagicMock()
-            
-            # Default mock prediction (no animal)
             mock_predict.return_value = [(500, 0.8), (501, 0.1)]
             
             classifier = AnimalClassifier(confidence_threshold=0.3)
@@ -152,7 +220,8 @@ class TestAnimalClassifier:
     
     def test_init(self):
         """Test classifier initialization."""
-        with patch.object(ModelLoader, "__init__", return_value=None):
+        with patch("src.analysis.model._torch_available", return_value=True), \
+             patch("src.analysis.model._onnx_available", return_value=False):
             classifier = AnimalClassifier(
                 model_name="mobilenet_v3_small",
                 confidence_threshold=0.5,

@@ -7,7 +7,7 @@ A Raspberry Pi-based wildlife monitoring system that detects and classifies anim
 This system uses a PIR motion sensor and camera module connected to a Raspberry Pi to:
 - Capture 1-2 second video clips when motion is detected
 - Record scheduled hourly video samples
-- Analyze footage using a TorchVision neural network to identify animals
+- Analyze footage using ML (ONNX Runtime or TorchVision) to identify animals
 - Provide a web UI to browse detections and view statistics
 
 ## Architecture
@@ -16,7 +16,7 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │  Raspberry Pi   │────▶│  Video Storage   │────▶│  Web UI (Flask) │
 │  + PIR Sensor   │     │  + ML Analysis   │     │  View Results   │
-│  + Camera       │     │  (TorchVision)   │     │                 │
+│  + Camera       │     │  (ONNX Runtime)  │     │                 │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
 ```
 
@@ -40,7 +40,7 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 |--------|--------|-------------|
 | `src/capture/` | ✅ Complete | Motion detection, camera control, scheduling |
 | `src/storage/` | ✅ Complete | SQLite database, video file management |
-| `src/analysis/` | ✅ Complete | TorchVision animal classification |
+| `src/analysis/` | ✅ Complete | Animal classification (ONNX Runtime / PyTorch) |
 | `src/web/` | ✅ Complete | Flask web UI for viewing results |
 
 ## Installation
@@ -64,10 +64,12 @@ pip install -r requirements.txt
 pip install picamera2 RPi.GPIO
 ```
 
-**For ML development (laptop/desktop):**
+**For ML model export (laptop/desktop only):**
 ```bash
 pip install torch torchvision
+python scripts/export_to_onnx.py
 ```
+This exports the MobileNetV3 model to `models/mobilenet_v3_small.onnx`. Copy this file to the Raspberry Pi.
 
 ## Quick Start
 
@@ -377,7 +379,45 @@ sudo mount /dev/sda1 /mnt/wildlife-data
 
 ## Analysis Module
 
-The analysis module uses TorchVision's MobileNetV3 to classify animals in captured videos.
+The analysis module classifies animals in captured videos using MobileNetV3 (ImageNet).
+
+### Inference Backends
+
+The system supports two inference backends, auto-detected at runtime:
+
+| Backend | Install | Recommended For |
+|---------|---------|-----------------|
+| **ONNX Runtime** (preferred) | `pip install onnxruntime` | Raspberry Pi 4, all platforms |
+| PyTorch/TorchVision (fallback) | `pip install torch torchvision` | Development only |
+
+#### Setting Up ONNX Runtime (Recommended)
+
+On your **development machine** (where PyTorch works):
+
+```bash
+pip install torch torchvision
+python scripts/export_to_onnx.py
+```
+
+This creates `models/mobilenet_v3_small.onnx`. Copy it to the Pi:
+
+```bash
+scp models/mobilenet_v3_small.onnx pi@raspberrypi:~/projects/wildlife-monitor/models/
+```
+
+On the **Raspberry Pi**:
+
+```bash
+pip install onnxruntime
+```
+
+The system will automatically detect and use the ONNX backend.
+
+#### Why Not PyTorch on Raspberry Pi?
+
+PyTorch wheels (from PyPI, piwheels, and the official CPU index) cause "Illegal instruction"
+errors on Raspberry Pi 4 (Cortex-A72 aarch64) running Bookworm 64-bit. ONNX Runtime has
+proper aarch64 support and is also faster for inference.
 
 ### Supported Animals
 
@@ -397,9 +437,9 @@ The analysis module uses TorchVision's MobileNetV3 to classify animals in captur
 from src.analysis import AnimalClassifier
 from pathlib import Path
 
-# Initialize classifier
+# Initialize classifier (auto-selects ONNX or PyTorch backend)
 classifier = AnimalClassifier(
-    model_name="mobilenet_v3_small",  # Lightweight model for Pi
+    model_name="mobilenet_v3_small",
     confidence_threshold=0.3,
 )
 
@@ -415,30 +455,6 @@ all_results = classifier.classify_video_all_frames(video_path, num_frames=5)
 for r in all_results:
     print(f"Frame {r.frame_number}: {r.animal_class} ({r.confidence:.2%})")
 ```
-
-### ML Dependencies on Raspberry Pi
-
-PyTorch on Raspberry Pi requires special installation (standard pip packages cause "Illegal instruction" errors):
-
-```bash
-# Option 1: PyTorch CPU wheels (recommended for Pi 4 64-bit)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-
-# Option 2: Use piwheels (pre-built for Pi)
-pip install torch torchvision --extra-index-url https://www.piwheels.org/simple
-
-# Install OpenCV
-pip install opencv-python-headless  # Headless version for Pi
-```
-
-**If PyTorch installation fails**, run without ML analysis:
-```bash
-python main.py --no-analysis
-```
-
-The system will still capture videos and serve the web UI - classification can be added later.
-
-**Note:** Model inference on Pi 4 takes ~1-2 seconds per frame with MobileNetV3.
 
 ## Web UI
 
@@ -546,7 +562,7 @@ wildlife-monitor/
 │   │   ├── database.py         # SQLite operations
 │   │   └── video_store.py      # Video file management
 │   ├── analysis/
-│   │   ├── model.py            # TorchVision model loading
+│   │   ├── model.py            # Model loading (ONNX Runtime / PyTorch)
 │   │   ├── classifier.py       # Animal classification
 │   │   └── frame_extractor.py  # Video frame extraction
 │   └── web/                    # Flask web UI
@@ -560,6 +576,9 @@ wildlife-monitor/
 │   ├── test_analysis.py
 │   ├── test_web.py
 │   └── test_integration.py
+├── models/                     # Exported ONNX model files
+├── scripts/
+│   └── export_to_onnx.py      # Export PyTorch model to ONNX
 ├── data/
 │   ├── videos/                 # Captured video clips
 │   └── wildlife.db             # SQLite database
