@@ -11,7 +11,7 @@ pytest>=7.0.0
 
 # ML inference (ONNX Runtime - recommended, works on all platforms including Pi)
 onnxruntime>=1.16.0
-numpy>=1.24.0
+numpy>=1.24.0,<2.0.0
 opencv-python-headless>=4.8.0
 
 # PyTorch (optional - only needed for model export or as fallback backend)
