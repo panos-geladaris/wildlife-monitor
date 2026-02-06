@@ -6,18 +6,18 @@ picamera2>=0.3.17
 libcamera>=0.0.5
 RPi.GPIO>=0.7.1
 
-# PyTorch for Raspberry Pi
+# ML inference on Raspberry Pi
 # --------------------------
-# Standard pip packages don't work on Pi (causes "Illegal instruction" error).
-# 
-# Option 1: Install from PyTorch CPU wheels (recommended for Pi 4 64-bit)
-#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# ONNX Runtime is the recommended backend (works reliably on Pi 4 aarch64):
+#   pip install onnxruntime
 #
-# Option 2: Use piwheels (pre-built for Pi)
-#   pip install torch torchvision --extra-index-url https://www.piwheels.org/simple
+# You also need the exported ONNX model file. On your dev machine, run:
+#   pip install torch torchvision
+#   python scripts/export_to_onnx.py
+# Then copy models/mobilenet_v3_small.onnx to the Pi.
 #
-# Option 3: Skip ML analysis entirely
+# PyTorch is NOT recommended on Pi 4 (causes "Illegal instruction" errors
+# on Cortex-A72 aarch64 Bookworm due to unsupported CPU instructions).
+#
+# To skip ML analysis entirely:
 #   python main.py --no-analysis
-#
-# Note: Model inference on Pi 4 takes ~1-2 seconds per frame with MobileNetV3.
-# If PyTorch installation fails, the system will still work without ML classification.
