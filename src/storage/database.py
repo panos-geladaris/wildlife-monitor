@@ -241,7 +241,26 @@ class Database:
                 "DELETE FROM detections WHERE id = ?", (detection_id,)
             )
             return cursor.rowcount > 0
-    
+
+    def delete_detections_bulk(self, detection_ids: list[int]) -> int:
+        """Delete multiple detection records.
+
+        Returns:
+            Number of records deleted.
+        """
+        if not detection_ids:
+            return 0
+
+        placeholders = ",".join("?" for _ in detection_ids)
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                f"DELETE FROM detections WHERE id IN ({placeholders})",
+                detection_ids,
+            )
+            count = cursor.rowcount
+            logger.info(f"Bulk deleted {count} detections")
+            return count
+
     def delete_old_detections(self, before_date: datetime) -> int:
         """
         Delete detections older than specified date.

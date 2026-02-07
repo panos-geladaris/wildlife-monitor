@@ -357,3 +357,82 @@ def get_summary():
     except Exception as e:
         logger.error(f"Error getting summary: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/detections/<int:detection_id>", methods=["DELETE"])
+def delete_detection(detection_id: int):
+    """
+    Delete a single detection and its video file.
+    
+    Returns:
+        Success message or 404 if not found.
+    """
+    try:
+        db = get_database()
+        detection = db.get_detection(detection_id)
+        
+        if detection is None:
+            return jsonify({"error": "Detection not found"}), 404
+        
+        db.delete_detection(detection_id)
+        
+        video_path = Path(detection.video_path)
+        video_deleted = False
+        if video_path.exists():
+            video_path.unlink()
+            video_deleted = True
+            logger.info(f"Deleted video file: {video_path}")
+        
+        return jsonify({
+            "message": "Detection deleted",
+            "id": detection_id,
+            "video_deleted": video_deleted,
+        })
+    except Exception as e:
+        logger.error(f"Error deleting detection {detection_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/detections/bulk-delete", methods=["POST"])
+def bulk_delete_detections():
+    """
+    Bulk delete detections and their video files.
+    
+    Request body:
+        {"ids": [1, 2, 3]}
+    
+    Returns:
+        Summary of deleted records and video files.
+    """
+    try:
+        data = request.get_json()
+        if not data or "ids" not in data:
+            return jsonify({"error": "Missing 'ids' in request body"}), 400
+        
+        detection_ids = data["ids"]
+        if not isinstance(detection_ids, list) or not detection_ids:
+            return jsonify({"error": "'ids' must be a non-empty list"}), 400
+        
+        db = get_database()
+        
+        videos_deleted = 0
+        for detection_id in detection_ids:
+            detection = db.get_detection(detection_id)
+            if detection:
+                video_path = Path(detection.video_path)
+                if video_path.exists():
+                    video_path.unlink()
+                    videos_deleted += 1
+        
+        records_deleted = db.delete_detections_bulk(detection_ids)
+        
+        logger.info(f"Bulk deleted {records_deleted} detections, {videos_deleted} videos")
+        
+        return jsonify({
+            "message": f"Deleted {records_deleted} detections",
+            "records_deleted": records_deleted,
+            "videos_deleted": videos_deleted,
+        })
+    except Exception as e:
+        logger.error(f"Error bulk deleting detections: {e}")
+        return jsonify({"error": str(e)}), 500
