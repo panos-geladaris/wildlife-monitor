@@ -29,6 +29,13 @@ camera:
 hardware:
   gpio_pin: 17               # PIR sensor GPIO pin
 
+# Object detection settings
+detection:
+  enabled: true
+  score_threshold: 0.3
+  max_boxes_per_frame: 5
+  num_frames: 5
+
 # Output
 output:
   video_dir: "data/videos"
