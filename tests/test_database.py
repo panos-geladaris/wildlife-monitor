@@ -263,6 +263,51 @@ class TestDatabase:
         assert motion_count == 1
 
 
+class TestBulkDelete:
+    """Tests for bulk delete functionality."""
+    
+    def test_bulk_delete_multiple(self, db):
+        """Test deleting multiple detections at once."""
+        ids = []
+        for i in range(5):
+            detection_id = db.add_detection(Detection(
+                timestamp=datetime.now(),
+                video_path=f"/data/videos/test_{i}.mp4",
+                trigger_type="motion",
+            ))
+            ids.append(detection_id)
+        
+        deleted = db.delete_detections_bulk(ids[:3])
+        
+        assert deleted == 3
+        assert db.get_detection_count() == 2
+    
+    def test_bulk_delete_empty_list(self, db):
+        """Test bulk delete with empty list."""
+        deleted = db.delete_detections_bulk([])
+        
+        assert deleted == 0
+    
+    def test_bulk_delete_nonexistent_ids(self, db):
+        """Test bulk delete with IDs that don't exist."""
+        deleted = db.delete_detections_bulk([9998, 9999])
+        
+        assert deleted == 0
+    
+    def test_bulk_delete_mixed_ids(self, db):
+        """Test bulk delete with mix of existing and non-existing IDs."""
+        detection_id = db.add_detection(Detection(
+            timestamp=datetime.now(),
+            video_path="/data/videos/test.mp4",
+            trigger_type="motion",
+        ))
+        
+        deleted = db.delete_detections_bulk([detection_id, 9999])
+        
+        assert deleted == 1
+        assert db.get_detection(detection_id) is None
+
+
 class TestDailySummary:
     """Tests for daily summary functionality."""
     
