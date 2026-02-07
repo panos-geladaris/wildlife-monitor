@@ -99,10 +99,10 @@ function createDetectionCard(detection) {
                        data-id="${detection.id}" onchange="updateBulkActions()">
             </div>
             <a href="/detection/${detection.id}" class="text-decoration-none">
-                <video class="card-img-top" style="height: 180px; object-fit: cover;" 
-                       preload="metadata" muted>
-                    <source src="/videos/${detection.video_filename}" type="video/mp4">
-                </video>
+                <img class="card-img-top" style="height: 180px; object-fit: cover;"
+                     src="/thumbnails/${detection.video_filename.replace(/\.[^.]+$/, '.jpg')}"
+                     alt="Detection ${detection.id}"
+                     loading="lazy">
                 <div class="card-body">
                     <p class="card-text text-muted small mb-2">${formatTimestamp(detection.timestamp)}</p>
                     <div class="d-flex gap-2 flex-wrap">
