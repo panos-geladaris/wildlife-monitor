@@ -73,7 +73,7 @@ def create_app(
     @app.route("/videos/<path:filename>")
     def serve_video(filename: str):
         """Serve video files."""
-        video_dir = app.config["VIDEO_DIR"]
+        video_dir = Path(app.config["VIDEO_DIR"]).resolve()
         return send_from_directory(video_dir, filename)
     
     logger.info(f"Flask app created: video_dir={app.config['VIDEO_DIR']}")
