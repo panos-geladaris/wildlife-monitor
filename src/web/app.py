@@ -75,6 +75,24 @@ def create_app(
         """Serve video files."""
         video_dir = Path(app.config["VIDEO_DIR"]).resolve()
         return send_from_directory(video_dir, filename)
+
+    @app.route("/thumbnails/<path:filename>")
+    def serve_thumbnail(filename: str):
+        """Serve thumbnail images, generating on-demand if missing."""
+        video_dir = Path(app.config["VIDEO_DIR"]).resolve()
+        thumb_dir = video_dir / "thumbnails"
+        thumb_path = thumb_dir / filename
+
+        if not thumb_path.exists():
+            stem = Path(filename).stem
+            for ext in (".mp4", ".h264", ".avi", ".mkv"):
+                video_path = video_dir / (stem + ext)
+                if video_path.exists():
+                    from src.storage.thumbnail import generate_thumbnail
+                    generate_thumbnail(video_path, output_path=thumb_path)
+                    break
+
+        return send_from_directory(thumb_dir.resolve(), filename)
     
     logger.info(f"Flask app created: video_dir={app.config['VIDEO_DIR']}")
     return app
