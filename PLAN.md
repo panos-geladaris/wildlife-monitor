@@ -260,6 +260,138 @@ wildlife-monitor/
 └── PLAN.md
 ```
 
+### 6. Object Detection Module 🔲
+**Status:** Planned
+
+**Goal:** Add bounding box object detection to locate and annotate animals in video frames, complementing the existing whole-image classification.
+
+**Model Choice: SSDLite320 + MobileNetV3-Large**
+- `torchvision.models.detection.ssdlite320_mobilenet_v3_large`
+- Lightest detection model in TorchVision — suitable for Pi 4 CPU inference
+- COCO-pretrained (covers bird, cat, dog, horse, sheep, cow, elephant, bear, zebra, giraffe)
+- For animals not in COCO (deer, fox, rabbit, squirrel, etc.): crop detected region → run existing MobileNetV3 classifier on the crop to map to `ANIMAL_CLASSES`
+
+**Components (new files):**
+- `src/analysis/detection_model.py` — Model loader for SSDLite320, preprocessing, inference
+- `src/analysis/detector.py` — Orchestrates frame extraction + detection + optional crop-classification
+- `src/analysis/annotator.py` — Draw bounding boxes and labels on frames, save annotated JPEGs
+
+**Core Data Structure:**
+```python
+@dataclass
+class DetectionBox:
+    label: str              # COCO label or mapped animal class
+    score: float
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    img_width: int
+    img_height: int
+    frame_number: int
+    frame_timestamp: float
+    animal_class: Optional[str] = None        # from crop→classifier refinement
+    animal_confidence: Optional[float] = None
+```
+
+**Database Schema (new table):**
+```sql
+CREATE TABLE IF NOT EXISTS frame_objects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    detection_id INTEGER NOT NULL,
+    frame_number INTEGER NOT NULL,
+    frame_timestamp REAL,
+    label TEXT,
+    score REAL,
+    x1 REAL, y1 REAL, x2 REAL, y2 REAL,
+    img_width INTEGER,
+    img_height INTEGER,
+    animal_class TEXT,
+    animal_confidence REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(detection_id) REFERENCES detections(id) ON DELETE CASCADE
+);
+```
+
+**Annotated Output:**
+- For each analyzed frame, save annotated JPEG: `data/annotated/<detection_id>/frame_<frame_number>.jpg`
+- Bounding box rectangle with label + confidence drawn via OpenCV
+
+**Performance Guardrails (Pi 4):**
+- Analyze 3–5 key frames per clip (reuse `FrameExtractor`)
+- Keep top-5 boxes per frame
+- Use `torch.inference_mode()` + `torch.set_num_threads(4)`
+- SSDLite expects 320px input (small and fast)
+
+**Integration Pipeline:**
+```
+Capture → DB insert → Thumbnail → Classification → Detection → Annotate → Update DB → Daily Summary
+```
+
+**Web UI Changes:**
+- Detection detail page: gallery of annotated key frames below the video player
+- New API endpoints:
+  - `GET /api/detections/<id>/objects` — bounding box data (JSON)
+  - `GET /annotated/<detection_id>/frame_<frame_number>.jpg` — serve annotated images
+
+**Coexistence Strategy:**
+- Detection runs after classification in the pipeline
+- Detector provides *localization* (where the animal is)
+- Classifier provides *taxonomy* (what the animal is)
+- For COCO-covered animals: use detector label directly
+- For non-COCO animals: crop detected region → classify with existing MobileNetV3
+
+---
+
+#### Implementation Steps
+
+**Step 1: Detection Model Loader** (`src/analysis/detection_model.py`)
+- [ ] Create `DetectionModelLoader` class mirroring `ModelLoader` pattern
+- [ ] Load `ssdlite320_mobilenet_v3_large` with COCO weights
+- [ ] Implement `predict(image) -> list[dict]` returning boxes, labels, scores
+- [ ] Add COCO label mapping (id → name) for the 91 COCO classes
+- [ ] Add filtering for animal-related COCO classes only
+
+**Step 2: Object Detector** (`src/analysis/detector.py`)
+- [ ] Create `ObjectDetector` class with `detect_video(video_path, num_frames, score_threshold) -> dict[int, list[DetectionBox]]`
+- [ ] Reuse `FrameExtractor.extract_key_frames()` for frame selection
+- [ ] For each frame: run detection → filter by score threshold → keep top-N boxes
+- [ ] Optional crop-classify: for each box, crop region from frame and run `AnimalClassifier.classify_image()` to refine label
+- [ ] Return results keyed by frame number
+
+**Step 3: Frame Annotator** (`src/analysis/annotator.py`)
+- [ ] Create `annotate_frame(image, boxes) -> Image` that draws rectangles + labels via OpenCV
+- [ ] Create `save_annotated_frames(detection_id, frames_with_boxes, output_dir)` to save JPEGs
+- [ ] Use color coding per animal class
+
+**Step 4: Database Changes** (`src/storage/database.py`)
+- [ ] Add `frame_objects` table creation to `_init_db()`
+- [ ] Add `add_frame_objects(detection_id, boxes: list[DetectionBox])` method
+- [ ] Add `get_frame_objects(detection_id) -> list[DetectionBox]` method
+- [ ] Add `delete_frame_objects(detection_id)` for cascade cleanup
+- [ ] Update bulk delete to also clean up annotated frame files
+
+**Step 5: Pipeline Integration** (`main.py`)
+- [ ] Add `_init_detector()` method to `WildlifeMonitor`
+- [ ] In `_on_video_captured()`, after classification: run detection → store boxes → save annotated frames
+- [ ] Add `--no-detection` CLI flag to disable object detection
+- [ ] Update `config.yaml` with detection settings (score threshold, max boxes, num frames)
+
+**Step 6: Web UI Updates**
+- [ ] Add `GET /api/detections/<id>/objects` endpoint returning bounding box JSON
+- [ ] Serve annotated frame images at `/annotated/<detection_id>/<filename>`
+- [ ] Update detection detail template to show annotated key-frame gallery below video player
+- [ ] Update `__init__.py` exports for new classes
+
+**Step 7: Tests**
+- [ ] Unit tests for `DetectionModelLoader` (model loading, dummy image inference)
+- [ ] Unit tests for `ObjectDetector` (video detection flow, crop-classify)
+- [ ] Unit tests for `annotate_frame` (output image dimensions, box drawing)
+- [ ] Integration tests for DB `frame_objects` CRUD
+- [ ] Integration tests for full pipeline (capture → detect → annotate → API)
+
+---
+
 ## Future Enhancements
 
 - [ ] Live streaming view in web UI
@@ -269,3 +401,6 @@ wildlife-monitor/
 - [ ] Night vision / IR camera support
 - [ ] Species-level bird identification
 - [ ] Weather correlation analysis
+- [ ] Annotated MP4 video generation (burn boxes into video file)
+- [ ] Canvas-based bounding box overlay synced to video.currentTime in web UI
+- [ ] Custom-trained lightweight detector for non-COCO animals (deer, fox, rabbit, squirrel)

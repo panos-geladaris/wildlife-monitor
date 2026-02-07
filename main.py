@@ -46,15 +46,18 @@ class WildlifeMonitor:
         simulation_mode: Optional[bool] = None,
         web_port: int = 5001,
         enable_analysis: bool = True,
+        enable_detection: bool = True,
     ):
         self.config_path = config_path
         self.video_dir = video_dir or Path("data/videos")
         self.db_path = db_path or Path("data/wildlife.db")
         self.web_port = web_port
         self.enable_analysis = enable_analysis
+        self.enable_detection = enable_detection
         
         self._capture_service = None
         self._classifier = None
+        self._detector = None
         self._database = None
         self._web_app = None
         self._web_thread = None
@@ -107,6 +110,28 @@ class WildlifeMonitor:
             logger.warning(f"Failed to initialize classifier: {e}")
             logger.warning("Running without animal classification")
             self._classifier = None
+    
+    def _init_detector(self) -> None:
+        """Initialize the object detector."""
+        if not self.enable_detection:
+            logger.info("Object detection disabled, skipping detector initialization")
+            return
+        
+        try:
+            from src.analysis import ObjectDetector
+            self._detector = ObjectDetector(
+                score_threshold=0.3,
+                max_boxes_per_frame=5,
+                classify_crops=True,
+            )
+            self._detector.load_model()
+            logger.info("Object detector initialized")
+        except ImportError as e:
+            logger.warning(f"Detection dependencies not available: {e}")
+            self._detector = None
+        except Exception as e:
+            logger.warning(f"Failed to initialize detector: {e}")
+            self._detector = None
     
     def _init_capture_service(self) -> None:
         """Initialize the capture service."""
@@ -163,6 +188,35 @@ class WildlifeMonitor:
                 logger.error(f"Analysis failed for {metadata.filepath}: {e}")
                 self._database.update_detection(detection_id, analyzed=True)
         
+        if self._detector and metadata.filepath.exists():
+            try:
+                frames_with_boxes = self._detector.detect_video_with_images(
+                    metadata.filepath, num_frames=5
+                )
+                
+                all_boxes = []
+                for _, boxes in frames_with_boxes:
+                    all_boxes.extend(boxes)
+                
+                if all_boxes:
+                    self._database.add_frame_objects(
+                        detection_id,
+                        [b.to_dict() for b in all_boxes],
+                    )
+                    
+                    from src.analysis.annotator import save_annotated_frames
+                    annotated_dir = self.video_dir.parent / "annotated"
+                    save_annotated_frames(
+                        detection_id, frames_with_boxes, annotated_dir
+                    )
+                    
+                    logger.info(
+                        f"Detected {len(all_boxes)} objects across "
+                        f"{len(frames_with_boxes)} frames"
+                    )
+            except Exception as e:
+                logger.error(f"Object detection failed for {metadata.filepath}: {e}")
+        
         self._database.update_daily_summary()
     
     def _start_web_server(self) -> None:
@@ -206,6 +260,7 @@ class WildlifeMonitor:
         
         if capture:
             self._init_classifier()
+            self._init_detector()
             self._init_capture_service()
             self._capture_service.start()
         
@@ -232,6 +287,9 @@ class WildlifeMonitor:
         
         if self._classifier:
             self._classifier.unload_model()
+        
+        if self._detector:
+            self._detector.unload_model()
         
         if hasattr(self, '_server'):
             self._server.shutdown()
@@ -350,6 +408,11 @@ Examples:
         help="Disable ML analysis (just record videos)",
     )
     parser.add_argument(
+        "--no-detection",
+        action="store_true",
+        help="Disable object detection (bounding boxes)",
+    )
+    parser.add_argument(
         "--simulate",
         action="store_true",
         help="Force simulation mode (no Pi hardware required)",
@@ -399,6 +462,7 @@ Examples:
         simulation_mode=simulation_mode,
         web_port=args.port,
         enable_analysis=not args.no_analysis,
+        enable_detection=not args.no_detection,
     )
     
     capture = not args.web_only
