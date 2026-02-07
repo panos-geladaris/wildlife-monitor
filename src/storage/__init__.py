@@ -13,6 +13,9 @@ def __getattr__(name: str):
     if name == "VideoStore":
         from .video_store import VideoStore
         return VideoStore
+    if name == "generate_thumbnail":
+        from .thumbnail import generate_thumbnail
+        return generate_thumbnail
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -21,4 +24,5 @@ __all__ = [
     "Detection",
     "DailySummary",
     "VideoStore",
+    "generate_thumbnail",
 ]
