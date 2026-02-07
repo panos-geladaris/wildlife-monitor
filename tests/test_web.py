@@ -115,6 +115,25 @@ class TestPageRoutes:
             mock_render.assert_called_once_with("statistics.html")
 
 
+class TestServeVideo:
+    """Tests for /videos/<filename> route."""
+
+    def test_serve_video_returns_file(self, app, client):
+        """Test GET /videos/<filename> serves an existing video file."""
+        video_dir = app.config["VIDEO_DIR"]
+        (video_dir / "test_clip.mp4").write_bytes(b"fake video data")
+
+        response = client.get("/videos/test_clip.mp4")
+        assert response.status_code == 200
+        assert response.content_type == "video/mp4"
+        assert response.data == b"fake video data"
+
+    def test_serve_video_not_found(self, client):
+        """Test GET /videos/<filename> returns 404 for missing file."""
+        response = client.get("/videos/nonexistent.mp4")
+        assert response.status_code == 404
+
+
 class TestApiStatus:
     """Tests for /api/status endpoint."""
     
