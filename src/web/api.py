@@ -120,6 +120,7 @@ def list_detections():
                     "id": d.id,
                     "timestamp": d.timestamp.isoformat(),
                     "video_path": d.video_path,
+                    "video_filename": Path(d.video_path).name,
                     "trigger_type": d.trigger_type,
                     "animal_class": d.animal_class,
                     "confidence": d.confidence,
