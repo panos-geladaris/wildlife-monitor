@@ -134,6 +134,12 @@ class WildlifeMonitor:
         )
         detection_id = self._database.add_detection(detection)
         
+        try:
+            from src.storage.thumbnail import generate_thumbnail
+            generate_thumbnail(metadata.filepath)
+        except Exception as e:
+            logger.warning(f"Thumbnail generation failed: {e}")
+        
         if self._classifier and metadata.filepath.exists():
             try:
                 result = self._classifier.classify_video(metadata.filepath)
