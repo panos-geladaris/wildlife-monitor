@@ -67,6 +67,18 @@
             </div>
         </div>
     </div>
+
+    <div id="annotatedFramesSection" class="d-none mt-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Detected Objects</h5>
+            </div>
+            <div class="card-body">
+                <p id="objectSummary" class="text-muted"></p>
+                <div id="annotatedGallery" class="row g-3"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="deleteModal" tabindex="-1">
@@ -143,6 +155,8 @@ async function loadDetection() {
         
         spinner.classList.add('d-none');
         content.classList.remove('d-none');
+
+        loadAnnotatedFrames();
         
     } catch (error) {
         console.error('Error loading detection:', error);
@@ -172,6 +186,48 @@ function deleteDetection() {
             alert('Error deleting detection: ' + error.message);
         }
     };
+}
+
+async function loadAnnotatedFrames() {
+    try {
+        const response = await fetch(`/api/detections/${detectionId}/objects`);
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (data.total_objects === 0) return;
+
+        const section = document.getElementById('annotatedFramesSection');
+        const gallery = document.getElementById('annotatedGallery');
+        const summary = document.getElementById('objectSummary');
+
+        summary.textContent = `${data.total_objects} object(s) detected across ${Object.keys(data.frames).length} frame(s)`;
+
+        for (const [frameNum, objects] of Object.entries(data.frames)) {
+            const col = document.createElement('div');
+            col.className = 'col-md-6 col-lg-4';
+
+            const labels = objects.map(o => {
+                const name = o.animal_class || o.label;
+                const pct = ((o.animal_confidence || o.score) * 100).toFixed(0);
+                return `${name} (${pct}%)`;
+            }).join(', ');
+
+            col.innerHTML = `
+                <div class="card h-100">
+                    <img src="/annotated/${detectionId}/frame_${frameNum}.jpg"
+                         class="card-img-top" alt="Frame ${frameNum}"
+                         onerror="this.parentElement.parentElement.remove()">
+                    <div class="card-body p-2">
+                        <small class="text-muted">Frame ${frameNum}: ${labels}</small>
+                    </div>
+                </div>`;
+            gallery.appendChild(col);
+        }
+
+        section.classList.remove('d-none');
+    } catch (error) {
+        console.error('Error loading annotated frames:', error);
+    }
 }
 
 loadDetection();
