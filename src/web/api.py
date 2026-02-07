@@ -155,6 +155,7 @@ def get_detection(detection_id: int):
             "id": detection.id,
             "timestamp": detection.timestamp.isoformat(),
             "video_path": detection.video_path,
+            "video_filename": Path(detection.video_path).name,
             "trigger_type": detection.trigger_type,
             "animal_class": detection.animal_class,
             "confidence": detection.confidence,

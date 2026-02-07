@@ -226,6 +226,18 @@ class TestApiDetections:
         assert "video_path" in data
         assert "trigger_type" in data
         assert "created_at" in data
+    
+    def test_get_detection_includes_video_filename(self, client, sample_detections):
+        """Test GET /api/detections/:id returns video_filename extracted from video_path."""
+        detection_id = sample_detections[0].id
+        response = client.get(f"/api/detections/{detection_id}")
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        
+        assert "video_filename" in data
+        assert data["video_filename"] == Path(data["video_path"]).name
+        assert "/" not in data["video_filename"]
 
 
 class TestApiStats:
