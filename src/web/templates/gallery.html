@@ -5,6 +5,10 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Detection Gallery</h1>
+    <div id="bulkActions" class="d-none">
+        <span id="selectedCount" class="me-2 text-muted">0 selected</span>
+        <button class="btn btn-danger btn-sm" onclick="bulkDelete()">Delete Selected</button>
+    </div>
 </div>
 
 <div class="row mb-4">
@@ -22,6 +26,12 @@
         <select id="animalFilter" class="form-select">
             <option value="">All</option>
         </select>
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+            <label class="form-check-label" for="selectAll">Select All</label>
+        </div>
     </div>
 </div>
 
@@ -83,8 +93,12 @@ function createDetectionCard(detection) {
         : '';
     
     col.innerHTML = `
-        <a href="/detection/${detection.id}" class="text-decoration-none">
-            <div class="card h-100">
+        <div class="card h-100">
+            <div class="position-absolute top-0 start-0 m-2" style="z-index: 1;">
+                <input type="checkbox" class="form-check-input detection-checkbox" 
+                       data-id="${detection.id}" onchange="updateBulkActions()">
+            </div>
+            <a href="/detection/${detection.id}" class="text-decoration-none">
                 <video class="card-img-top" style="height: 180px; object-fit: cover;" 
                        preload="metadata" muted>
                     <source src="/videos/${detection.video_filename}" type="video/mp4">
@@ -96,8 +110,8 @@ function createDetectionCard(detection) {
                         ${animalInfo}
                     </div>
                 </div>
-            </div>
-        </a>
+            </a>
+        </div>
     `;
     
     return col;
@@ -183,6 +197,60 @@ async function loadAnimalClasses() {
 triggerFilter.addEventListener('change', () => loadDetections(true));
 animalFilter.addEventListener('change', () => loadDetections(true));
 loadMoreBtn.addEventListener('click', () => loadDetections(false));
+
+function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.detection-checkbox:checked'))
+        .map(cb => parseInt(cb.dataset.id));
+}
+
+function updateBulkActions() {
+    const selected = getSelectedIds();
+    const bulkActions = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    if (selected.length > 0) {
+        bulkActions.classList.remove('d-none');
+        selectedCount.textContent = selected.length + ' selected';
+    } else {
+        bulkActions.classList.add('d-none');
+    }
+}
+
+function toggleSelectAll() {
+    const checked = document.getElementById('selectAll').checked;
+    document.querySelectorAll('.detection-checkbox').forEach(cb => {
+        cb.checked = checked;
+    });
+    updateBulkActions();
+}
+
+async function bulkDelete() {
+    const ids = getSelectedIds();
+    if (ids.length === 0) return;
+    
+    if (!confirm(`Delete ${ids.length} detection(s)? This will also remove the video files.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/detections/bulk-delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids: ids}),
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('selectAll').checked = false;
+            loadDetections(true);
+        } else {
+            alert('Failed to delete: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error deleting detections: ' + error.message);
+    }
+}
 
 loadAnimalClasses();
 loadDetections();
