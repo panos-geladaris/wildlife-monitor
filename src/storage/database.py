@@ -82,6 +82,31 @@ class Database:
                 
                 CREATE INDEX IF NOT EXISTS idx_detections_animal_class 
                 ON detections(animal_class);
+
+                CREATE TABLE IF NOT EXISTS frame_objects (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    detection_id INTEGER NOT NULL,
+                    frame_number INTEGER NOT NULL,
+                    frame_timestamp REAL,
+                    label TEXT,
+                    score REAL,
+                    x1 REAL,
+                    y1 REAL,
+                    x2 REAL,
+                    y2 REAL,
+                    img_width INTEGER,
+                    img_height INTEGER,
+                    animal_class TEXT,
+                    animal_confidence REAL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(detection_id) REFERENCES detections(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_frame_objects_detection
+                ON frame_objects(detection_id);
+
+                CREATE INDEX IF NOT EXISTS idx_frame_objects_frame
+                ON frame_objects(detection_id, frame_number);
             """)
         logger.info(f"Database initialized: {self.db_path}")
     
@@ -90,6 +115,7 @@ class Database:
         """Get a database connection with proper cleanup."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
         try:
             yield conn
             conn.commit()
@@ -276,7 +302,106 @@ class Database:
             count = cursor.rowcount
             logger.info(f"Deleted {count} old detections before {before_date}")
             return count
-    
+
+    def add_frame_objects(self, detection_id: int, boxes: list[dict]) -> int:
+        """
+        Store bounding box detections for a video's analyzed frames.
+        
+        Args:
+            detection_id: The parent detection ID
+            boxes: List of dicts with keys: frame_number, frame_timestamp, label, score,
+                   x1, y1, x2, y2, img_width, img_height, animal_class, animal_confidence
+        
+        Returns:
+            Number of rows inserted.
+        """
+        if not boxes:
+            return 0
+        
+        with self._get_connection() as conn:
+            conn.executemany(
+                """
+                INSERT INTO frame_objects
+                (detection_id, frame_number, frame_timestamp, label, score,
+                 x1, y1, x2, y2, img_width, img_height, animal_class, animal_confidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        detection_id,
+                        b["frame_number"],
+                        b.get("frame_timestamp"),
+                        b.get("label"),
+                        b.get("score"),
+                        b.get("x1"),
+                        b.get("y1"),
+                        b.get("x2"),
+                        b.get("y2"),
+                        b.get("img_width"),
+                        b.get("img_height"),
+                        b.get("animal_class"),
+                        b.get("animal_confidence"),
+                    )
+                    for b in boxes
+                ],
+            )
+            count = len(boxes)
+            logger.debug(f"Added {count} frame objects for detection {detection_id}")
+            return count
+
+    def get_frame_objects(self, detection_id: int) -> list[dict]:
+        """
+        Get all bounding box detections for a detection.
+        
+        Returns:
+            List of dicts with bounding box data, ordered by frame_number.
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM frame_objects 
+                WHERE detection_id = ? 
+                ORDER BY frame_number, score DESC
+                """,
+                (detection_id,),
+            ).fetchall()
+            
+            return [
+                {
+                    "id": row["id"],
+                    "detection_id": row["detection_id"],
+                    "frame_number": row["frame_number"],
+                    "frame_timestamp": row["frame_timestamp"],
+                    "label": row["label"],
+                    "score": row["score"],
+                    "x1": row["x1"],
+                    "y1": row["y1"],
+                    "x2": row["x2"],
+                    "y2": row["y2"],
+                    "img_width": row["img_width"],
+                    "img_height": row["img_height"],
+                    "animal_class": row["animal_class"],
+                    "animal_confidence": row["animal_confidence"],
+                }
+                for row in rows
+            ]
+
+    def delete_frame_objects(self, detection_id: int) -> int:
+        """Delete all frame objects for a detection.
+        
+        Returns:
+            Number of records deleted.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM frame_objects WHERE detection_id = ?",
+                (detection_id,),
+            )
+            count = cursor.rowcount
+            if count > 0:
+                logger.debug(f"Deleted {count} frame objects for detection {detection_id}")
+            return count
+
     def get_detection_count(
         self,
         trigger_type: Optional[str] = None,
