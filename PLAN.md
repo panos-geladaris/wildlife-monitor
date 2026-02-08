@@ -392,6 +392,80 @@ Capture → DB insert → Thumbnail → Classification → Detection → Annotat
 
 ---
 
+### 7. On-Demand Test Capture & Analysis 🔲
+**Status:** Planned
+
+**Goal:** Add a button in the web UI that triggers a 4-second video capture, runs the full analysis pipeline (classification + object detection), and redirects to the detection detail page — useful for testing camera angle, lighting, and positioning.
+
+**Architecture Fit:**
+- `Camera.capture_video(duration, reason=MANUAL)` already captures video
+- `WildlifeMonitor._on_video_captured(metadata)` runs the full pipeline (DB insert → thumbnail → classification → detection → annotate → daily summary)
+- The detection detail page (`/detection/<id>`) already shows video, classification, and annotated frames
+- Gap: the web layer has no reference to the `WildlifeMonitor` or `CaptureService` instances, and there is no API endpoint to trigger a capture
+
+**API Contract:**
+```
+POST /api/test-capture
+Request body: (none)
+Response 200:
+{
+  "detection_id": 42,
+  "video_filename": "manual_20250208_143022.mp4",
+  "animal_class": "bird",
+  "confidence": 0.87,
+  "message": "Test capture complete"
+}
+Response 503:
+{
+  "error": "Capture service not available (web-only mode)"
+}
+```
+
+**UI Location:**
+- New "Test Capture" card on the dashboard (`/`) between the status cards and the recent detections table
+- Button triggers POST, shows spinner ("Capturing & Analyzing..."), then redirects to `/detection/<id>`
+- Button disabled while capture is in progress to prevent double-triggers
+
+**Design Decisions:**
+- No new database tables (uses existing `detections` table with `trigger_type = "manual"`)
+- No new templates (reuses the existing detection detail page)
+- No new config options (4s duration hardcoded in the endpoint)
+- No background task queue — request blocks for ~5-6s which is acceptable for a manual test action
+
+---
+
+#### Implementation Steps
+
+**Step 1: Expose monitor instance to Flask** (`main.py`)
+- [ ] In `_start_web_server()`, store `self` on `app.config["MONITOR"]` after calling `create_app()`
+
+**Step 2: Add duration parameter to manual capture** (`src/capture/capture_service.py`)
+- [ ] Add optional `duration: float = None` parameter to `trigger_manual_capture()`
+- [ ] Pass duration to `self._camera.capture_video(duration=duration, reason=CaptureReason.MANUAL)`
+
+**Step 3: New API endpoint** (`src/web/api.py`)
+- [ ] Add `POST /api/test-capture` endpoint
+- [ ] Read `current_app.config["MONITOR"]` to access the monitor instance
+- [ ] Call `monitor._capture_service.trigger_manual_capture(duration=4.0)` to capture
+- [ ] Call `monitor._on_video_captured(metadata)` to run the full analysis pipeline
+- [ ] Query the database for the newly created detection to get classification results
+- [ ] Return `{"detection_id": id, "video_filename": ..., "animal_class": ..., "confidence": ...}`
+- [ ] Return 503 if capture service is unavailable (web-only mode)
+
+**Step 4: Dashboard UI update** (`src/web/templates/index.html`)
+- [ ] Add "Test Capture" card with description and capture button
+- [ ] On click: disable button, show spinner text ("Capturing & Analyzing...")
+- [ ] POST to `/api/test-capture`
+- [ ] On success: redirect to `/detection/<detection_id>`
+- [ ] On error: show alert, re-enable button
+
+**Step 5: Tests**
+- [ ] Unit test for `trigger_manual_capture(duration=4.0)` passes duration to camera
+- [ ] Integration test for `POST /api/test-capture` returns detection ID
+- [ ] Test 503 response when monitor has no capture service (web-only mode)
+
+---
+
 ## Future Enhancements
 
 - [ ] Live streaming view in web UI
