@@ -45,6 +45,21 @@
         </div>
     </div>
 
+    <!-- Test Capture -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">Test Capture</div>
+            <div class="card-body d-flex align-items-center justify-content-between">
+                <div>
+                    <p class="mb-0">Capture a 4-second test video and run full analysis. Use to verify camera angle and lighting.</p>
+                </div>
+                <button id="testCaptureBtn" class="btn btn-primary ms-3 text-nowrap" onclick="triggerTestCapture()">
+                    Capture &amp; Analyze
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Recent Detections -->
     <div class="col-12">
         <div class="card">
@@ -160,6 +175,28 @@ async function loadSummary() {
         summaryCard.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
         animalsCard.innerHTML = `<div class="text-danger">Error loading data</div>`;
         recentCard.innerHTML = `<div class="text-danger">Error loading data</div>`;
+    }
+}
+
+async function triggerTestCapture() {
+    const btn = document.getElementById('testCaptureBtn');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Capturing & Analyzing...';
+
+    try {
+        const response = await fetch('/api/test-capture', { method: 'POST' });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Capture failed');
+        }
+
+        window.location.href = `/detection/${data.detection_id}`;
+    } catch (error) {
+        alert('Test capture failed: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
 }
 
