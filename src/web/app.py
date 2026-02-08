@@ -93,6 +93,13 @@ def create_app(
                     break
 
         return send_from_directory(thumb_dir.resolve(), filename)
+
+    @app.route("/annotated/<int:detection_id>/<path:filename>")
+    def serve_annotated(detection_id: int, filename: str):
+        """Serve annotated frame images."""
+        video_dir = Path(app.config["VIDEO_DIR"]).resolve()
+        annotated_dir = video_dir.parent / "annotated" / str(detection_id)
+        return send_from_directory(annotated_dir.resolve(), filename)
     
     logger.info(f"Flask app created: video_dir={app.config['VIDEO_DIR']}")
     return app
