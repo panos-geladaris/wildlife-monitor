@@ -472,3 +472,42 @@ def bulk_delete_detections():
     except Exception as e:
         logger.error(f"Error bulk deleting detections: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/test-capture", methods=["POST"])
+def test_capture():
+    """
+    Trigger an on-demand 4-second test capture with full analysis.
+
+    Requires the MONITOR instance to be available (not web-only mode).
+
+    Returns:
+        Detection ID and analysis results.
+    """
+    TEST_CAPTURE_DURATION = 4.0
+
+    monitor = current_app.config.get("MONITOR")
+    if monitor is None or getattr(monitor, "_capture_service", None) is None:
+        return jsonify({"error": "Capture service not available (web-only mode)"}), 503
+
+    try:
+        metadata = monitor._capture_service.trigger_manual_capture(
+            duration=TEST_CAPTURE_DURATION
+        )
+
+        db = get_database()
+        detections = db.get_detections(limit=1)
+        if detections:
+            d = detections[0]
+            return jsonify({
+                "detection_id": d.id,
+                "video_filename": Path(d.video_path).name,
+                "animal_class": d.animal_class,
+                "confidence": d.confidence,
+                "message": "Test capture complete",
+            })
+
+        return jsonify({"error": "Capture completed but detection not found"}), 500
+    except Exception as e:
+        logger.error(f"Test capture failed: {e}")
+        return jsonify({"error": str(e)}), 500

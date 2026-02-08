@@ -227,6 +227,7 @@ class WildlifeMonitor:
             video_dir=self.video_dir,
             db_path=self.db_path,
         )
+        self._web_app.config["MONITOR"] = self
         
         def run_server():
             from werkzeug.serving import make_server
