@@ -206,16 +206,20 @@ function updateAnimalChart(data) {
 async function loadDailyStats() {
     const days = document.getElementById('dailyDaysSelect').value;
     const data = await fetchDailyStats(days);
-    if (data) {
-        updateDailyChart(data);
+    if (data && data.stats) {
+        updateDailyChart(data.stats);
     }
 }
 
 async function loadAnimalStats() {
     const days = document.getElementById('animalDaysSelect').value;
     const data = await fetchAnimalStats(days);
-    if (data) {
-        updateAnimalChart(data);
+    if (data && data.animals) {
+        const animalMap = {};
+        for (const entry of data.animals) {
+            animalMap[entry.animal_class] = entry.count;
+        }
+        updateAnimalChart(animalMap);
     }
 }
 
