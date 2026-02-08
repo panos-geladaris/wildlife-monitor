@@ -11,6 +11,7 @@ from .motion_detector import MotionDetector, MotionEvent
 from .camera import Camera, CaptureReason, VideoMetadata
 from .scheduler import CaptureScheduler
 from .config import CaptureServiceConfig, load_config
+from .daylight import DaylightGate, SunriseSunsetClient
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,20 @@ class CaptureService:
         self._motion_thread: Optional[threading.Thread] = None
         self._running = False
         
+        self._daylight_gate: Optional[DaylightGate] = None
+        self._daylight_timer: Optional[threading.Timer] = None
+        if config.daylight_enabled:
+            client = SunriseSunsetClient()
+            self._daylight_gate = DaylightGate(
+                client=client,
+                lat=config.daylight_lat,
+                lng=config.daylight_lng,
+                tzid=config.daylight_tzid,
+                start_offset_minutes=config.daylight_start_offset_minutes,
+                end_offset_minutes=config.daylight_end_offset_minutes,
+                fallback=config.daylight_fallback,
+            )
+        
         self._setup_callbacks()
     
     def _setup_callbacks(self) -> None:
@@ -68,8 +83,16 @@ class CaptureService:
         """
         self._on_capture_callback = callback
     
+    def _capture_allowed(self) -> bool:
+        if self._daylight_gate is None:
+            return True
+        return self._daylight_gate.is_capture_allowed()
+
     def _handle_motion(self, event: MotionEvent) -> None:
         """Handle motion detection by capturing video."""
+        if not self._capture_allowed():
+            logger.info("Motion ignored (outside daylight window)")
+            return
         logger.info(f"Motion triggered capture at {event.timestamp}")
         try:
             metadata = self._camera.capture_on_motion()
@@ -79,6 +102,9 @@ class CaptureService:
     
     def _handle_scheduled_capture(self) -> None:
         """Handle hourly scheduled capture."""
+        if not self._capture_allowed():
+            logger.info("Scheduled capture skipped (outside daylight window)")
+            return
         try:
             metadata = self._camera.capture_video(
                 duration=self.config.scheduled_video_duration,
@@ -90,6 +116,9 @@ class CaptureService:
     
     def _handle_interval_capture(self) -> None:
         """Handle 15-minute interval captures with multiple zoom levels."""
+        if not self._capture_allowed():
+            logger.info("Interval capture skipped (outside daylight window)")
+            return
         original_zoom = self._camera.get_zoom()
         
         for zoom_level in self.config.interval_capture_zoom_levels:
@@ -138,6 +167,19 @@ class CaptureService:
         )
         self._motion_thread.start()
         
+        if self._daylight_gate is not None:
+            self._daylight_gate.refresh_if_needed(self._daylight_gate._now_fn())
+            allowed = self._daylight_gate.is_capture_allowed()
+            sun = self._daylight_gate.sun_times
+            if sun:
+                logger.info(
+                    "Daylight capture: sunrise %s — sunset %s (currently %s)",
+                    sun.sunrise.strftime("%H:%M"),
+                    sun.sunset.strftime("%H:%M"),
+                    "active" if allowed else "paused",
+                )
+            self._schedule_daylight_transition()
+        
         logger.info("Capture service started")
         logger.info(f"  - Simulation mode: {self.config.simulation_mode}")
         logger.info(f"  - Motion detection: GPIO {self.config.gpio_pin}")
@@ -145,11 +187,38 @@ class CaptureService:
         logger.info(f"  - Video duration: {self.config.video_duration}s")
         logger.info(f"  - Zoom level: {self.config.zoom_level}x")
         logger.info(f"  - Autofocus: {self.config.autofocus}")
+        logger.info(f"  - Daylight gating: {self.config.daylight_enabled}")
         logger.info(f"  - Output: {self.config.video_output_dir}")
     
+    def _schedule_daylight_transition(self) -> None:
+        if self._daylight_gate is None:
+            return
+        transition = self._daylight_gate.next_transition()
+        if transition is None:
+            return
+        transition_time, will_be_allowed = transition
+        now = self._daylight_gate._now_fn()
+        delay = max(0, (transition_time - now).total_seconds())
+        label = "sunrise" if will_be_allowed else "sunset"
+        logger.info("Next daylight transition (%s) in %.0f minutes", label, delay / 60)
+
+        def _on_transition():
+            if not self._running:
+                return
+            state = "active" if will_be_allowed else "paused"
+            logger.info("Daylight transition: capture is now %s", state)
+            self._schedule_daylight_transition()
+
+        self._daylight_timer = threading.Timer(delay, _on_transition)
+        self._daylight_timer.daemon = True
+        self._daylight_timer.start()
+
     def stop(self) -> None:
         """Stop the capture service."""
         self._running = False
+        if self._daylight_timer is not None:
+            self._daylight_timer.cancel()
+            self._daylight_timer = None
         self._scheduler.stop()
         self._motion_detector.stop()
         self._camera.close()
