@@ -228,9 +228,11 @@ class CaptureService:
         
         logger.info("Capture service stopped")
     
-    def trigger_manual_capture(self) -> VideoMetadata:
+    def trigger_manual_capture(self, duration: float = None) -> VideoMetadata:
         """Manually trigger a video capture."""
-        metadata = self._camera.capture_video(reason=CaptureReason.MANUAL)
+        metadata = self._camera.capture_video(
+            duration=duration, reason=CaptureReason.MANUAL
+        )
         self._notify_capture(metadata)
         return metadata
     
