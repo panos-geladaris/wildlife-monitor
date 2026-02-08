@@ -86,6 +86,8 @@ class TestTestCaptureEndpoint:
         video_file.write_text("fake video")
 
         monitor = MagicMock()
+        db = Database(db_path)
+
         metadata = VideoMetadata(
             filepath=video_file,
             timestamp=datetime.now(),
@@ -93,22 +95,20 @@ class TestTestCaptureEndpoint:
             reason=CaptureReason.MANUAL,
             resolution=(1280, 720),
         )
-        monitor._capture_service.trigger_manual_capture.return_value = metadata
 
-        db = Database(db_path)
-
-        def fake_on_video_captured(m):
+        def fake_trigger(duration=None):
             detection = Detection(
-                timestamp=m.timestamp,
-                video_path=str(m.filepath),
-                trigger_type=m.reason.value,
+                timestamp=metadata.timestamp,
+                video_path=str(metadata.filepath),
+                trigger_type=metadata.reason.value,
                 animal_class="bird",
                 confidence=0.87,
                 analyzed=True,
             )
             db.add_detection(detection)
+            return metadata
 
-        monitor._on_video_captured.side_effect = fake_on_video_captured
+        monitor._capture_service.trigger_manual_capture.side_effect = fake_trigger
 
         app.config["MONITOR"] = monitor
 
@@ -134,11 +134,11 @@ class TestTestCaptureEndpoint:
             duration=4.0
         )
 
-    def test_calls_on_video_captured(self, app_with_monitor):
+    def test_does_not_double_call_on_video_captured(self, app_with_monitor):
         app, monitor, db = app_with_monitor
         with app.test_client() as client:
             client.post("/api/test-capture")
-        monitor._on_video_captured.assert_called_once()
+        monitor._on_video_captured.assert_not_called()
 
     def test_503_when_no_monitor(self, tmp_path):
         app = create_app(
