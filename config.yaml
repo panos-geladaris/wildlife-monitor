@@ -13,7 +13,7 @@ hourly:
 
 # 15-minute interval captures (with zoom comparison)
 interval:
-  enabled: true
+  enabled: false
   minutes: 15                # Interval in minutes
   video_duration: 5.0        # Duration in seconds
   zoom_levels: [1.0]    # Capture at each zoom level
