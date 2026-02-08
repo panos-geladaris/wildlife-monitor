@@ -495,8 +495,6 @@ def test_capture():
             duration=TEST_CAPTURE_DURATION
         )
 
-        monitor._on_video_captured(metadata)
-
         db = get_database()
         detections = db.get_detections(limit=1)
         if detections:
