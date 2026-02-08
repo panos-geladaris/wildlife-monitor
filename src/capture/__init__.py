@@ -22,6 +22,9 @@ def __getattr__(name: str):
     if name in ("CaptureServiceConfig", "load_config"):
         from .config import CaptureServiceConfig, load_config
         return {"CaptureServiceConfig": CaptureServiceConfig, "load_config": load_config}[name]
+    if name in ("SunTimes", "SunriseSunsetClient", "DaylightGate"):
+        from .daylight import SunTimes, SunriseSunsetClient, DaylightGate
+        return {"SunTimes": SunTimes, "SunriseSunsetClient": SunriseSunsetClient, "DaylightGate": DaylightGate}[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -36,4 +39,7 @@ __all__ = [
     "CaptureService",
     "CaptureServiceConfig",
     "load_config",
+    "SunTimes",
+    "SunriseSunsetClient",
+    "DaylightGate",
 ]
