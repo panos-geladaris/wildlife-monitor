@@ -3,7 +3,7 @@
 # Motion-triggered captures
 motion:
   video_duration: 5.0        # Duration in seconds
-  cooldown_seconds: 5.0      # Minimum time between triggers
+  cooldown_seconds: 3.0      # Minimum time between triggers
 
 # Hourly scheduled captures
 hourly:
@@ -29,6 +29,23 @@ camera:
 hardware:
   gpio_pin: 17               # PIR sensor GPIO pin
 
+# Object detection settings
+detection:
+  enabled: true
+  score_threshold: 0.3
+  max_boxes_per_frame: 5
+  num_frames: 5
+
 # Output
 output:
   video_dir: "data/videos"
+
+# Daylight-only capture
+daylight:
+  enabled: true
+  lat: 51.544417
+  lng: -0.164389
+  tzid: "Europe/London"
+  start_offset_minutes: 0
+  end_offset_minutes: 0
+  fallback: "allow"

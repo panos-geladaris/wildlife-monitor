@@ -168,6 +168,40 @@ def get_detection(detection_id: int):
         return jsonify({"error": str(e)}), 500
 
 
+@api_bp.route("/detections/<int:detection_id>/objects")
+def get_detection_objects(detection_id: int):
+    """
+    Get bounding box detections for a video's analyzed frames.
+    
+    Returns:
+        List of detected objects grouped by frame number.
+    """
+    try:
+        db = get_database()
+        detection = db.get_detection(detection_id)
+        
+        if detection is None:
+            return jsonify({"error": "Detection not found"}), 404
+        
+        frame_objects = db.get_frame_objects(detection_id)
+        
+        frames: dict[int, list] = {}
+        for obj in frame_objects:
+            fn = obj["frame_number"]
+            if fn not in frames:
+                frames[fn] = []
+            frames[fn].append(obj)
+        
+        return jsonify({
+            "detection_id": detection_id,
+            "frames": {str(k): v for k, v in sorted(frames.items())},
+            "total_objects": len(frame_objects),
+        })
+    except Exception as e:
+        logger.error(f"Error getting detection objects {detection_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @api_bp.route("/videos")
 def list_videos():
     """

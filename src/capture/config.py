@@ -33,6 +33,13 @@ class CaptureServiceConfig:
     interval_capture_minutes: int = 15
     interval_capture_duration: float = 7.0
     interval_capture_zoom_levels: tuple[float, ...] = (1.0, 2.0)
+    daylight_enabled: bool = False
+    daylight_lat: float = 51.544417
+    daylight_lng: float = -0.164389
+    daylight_tzid: str = "Europe/London"
+    daylight_start_offset_minutes: int = 0
+    daylight_end_offset_minutes: int = 0
+    daylight_fallback: str = "allow"
 
 
 def load_config(config_path: Optional[Path] = None) -> CaptureServiceConfig:
@@ -64,6 +71,7 @@ def load_config(config_path: Optional[Path] = None) -> CaptureServiceConfig:
     camera = data.get("camera", {})
     hardware = data.get("hardware", {})
     output = data.get("output", {})
+    daylight = data.get("daylight", {})
     
     resolution = camera.get("resolution", [1280, 720])
     zoom_levels = interval.get("zoom_levels", [1.0, 2.0])
@@ -88,4 +96,11 @@ def load_config(config_path: Optional[Path] = None) -> CaptureServiceConfig:
         interval_capture_minutes=interval.get("minutes", 15),
         interval_capture_duration=interval.get("video_duration", 7.0),
         interval_capture_zoom_levels=tuple(zoom_levels),
+        daylight_enabled=daylight.get("enabled", False),
+        daylight_lat=daylight.get("lat", 51.544417),
+        daylight_lng=daylight.get("lng", -0.164389),
+        daylight_tzid=daylight.get("tzid", "Europe/London"),
+        daylight_start_offset_minutes=daylight.get("start_offset_minutes", 0),
+        daylight_end_offset_minutes=daylight.get("end_offset_minutes", 0),
+        daylight_fallback=daylight.get("fallback", "allow"),
     )
