@@ -214,6 +214,24 @@ class WildlifeMonitor:
                         f"Detected {len(all_boxes)} objects across "
                         f"{len(frames_with_boxes)} frames"
                     )
+                    
+                    current = self._database.get_detection(detection_id)
+                    if current and (not current.animal_class or current.animal_class == "unknown"):
+                        best_box = max(
+                            (b for b in all_boxes if b.animal_class),
+                            key=lambda b: b.animal_confidence or 0,
+                            default=None,
+                        )
+                        if best_box and best_box.animal_class:
+                            self._database.update_detection(
+                                detection_id,
+                                animal_class=best_box.animal_class,
+                                confidence=best_box.animal_confidence,
+                            )
+                            logger.info(
+                                f"Updated animal from detector: "
+                                f"{best_box.animal_class} ({best_box.animal_confidence:.1%})"
+                            )
             except Exception as e:
                 logger.error(f"Object detection failed for {metadata.filepath}: {e}")
         
