@@ -46,6 +46,6 @@ daylight:
   lat: 51.5074
   lng: -0.1278
   tzid: "Europe/London"
-  start_offset_minutes: 0
-  end_offset_minutes: 0
+  start_offset_minutes: 20
+  end_offset_minutes: 20
   fallback: "allow"
