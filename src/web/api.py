@@ -3,6 +3,7 @@ REST API endpoints for wildlife monitor.
 """
 
 import logging
+import shutil
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from flask import Blueprint, jsonify, request, current_app
@@ -24,6 +25,19 @@ def get_video_store():
     from src.storage.video_store import VideoStore
     video_dir = current_app.config.get("VIDEO_DIR")
     return VideoStore(video_dir)
+
+
+def _cleanup_detection_artifacts(detection, detection_id: int) -> None:
+    """Remove thumbnail and annotated frames associated with a detection."""
+    video_dir = Path(current_app.config.get("VIDEO_DIR")).resolve()
+
+    thumb_path = video_dir / "thumbnails" / (Path(detection.video_path).stem + ".jpg")
+    if thumb_path.exists():
+        thumb_path.unlink()
+
+    annotated_dir = video_dir.parent / "annotated" / str(detection_id)
+    if annotated_dir.exists():
+        shutil.rmtree(annotated_dir)
 
 
 @api_bp.route("/status")
@@ -419,6 +433,8 @@ def delete_detection(detection_id: int):
             video_deleted = True
             logger.info(f"Deleted video file: {video_path}")
         
+        _cleanup_detection_artifacts(detection, detection_id)
+        
         return jsonify({
             "message": "Detection deleted",
             "id": detection_id,
@@ -459,6 +475,7 @@ def bulk_delete_detections():
                 if video_path.exists():
                     video_path.unlink()
                     videos_deleted += 1
+                _cleanup_detection_artifacts(detection, detection_id)
         
         records_deleted = db.delete_detections_bulk(detection_ids)
         

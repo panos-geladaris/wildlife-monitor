@@ -63,9 +63,19 @@ class WildlifeMonitor:
         self._web_thread = None
         self._running = False
         self._simulation_mode = simulation_mode
+        self._config_data = self._load_config_data()
         
         self.video_dir.mkdir(parents=True, exist_ok=True)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    def _load_config_data(self) -> dict:
+        """Load raw config data from YAML file."""
+        import yaml
+        config_file = self.config_path or Path("config.yaml")
+        if config_file.exists():
+            with open(config_file) as f:
+                return yaml.safe_load(f) or {}
+        return {}
     
     def _detect_simulation_mode(self) -> bool:
         """Auto-detect if we should run in simulation mode."""
@@ -117,11 +127,16 @@ class WildlifeMonitor:
             logger.info("Object detection disabled, skipping detector initialization")
             return
         
+        detection_cfg = self._config_data.get("detection", {})
+        if detection_cfg.get("enabled") is False:
+            logger.info("Object detection disabled in config, skipping")
+            return
+        
         try:
             from src.analysis import ObjectDetector
             self._detector = ObjectDetector(
-                score_threshold=0.3,
-                max_boxes_per_frame=5,
+                score_threshold=detection_cfg.get("score_threshold", 0.3),
+                max_boxes_per_frame=detection_cfg.get("max_boxes_per_frame", 5),
                 classify_crops=True,
             )
             self._detector.load_model()
@@ -147,7 +162,16 @@ class WildlifeMonitor:
         logger.info(f"Capture service initialized (simulation={config.simulation_mode})")
     
     def _on_video_captured(self, metadata) -> None:
-        """Handle new video capture - analyze and store in database."""
+        """Handle new video capture - run analysis in a background thread."""
+        thread = threading.Thread(
+            target=self._process_capture,
+            args=(metadata,),
+            daemon=True,
+        )
+        thread.start()
+
+    def _process_capture(self, metadata) -> None:
+        """Analyze a captured video and store results in the database."""
         from src.storage import Detection
         
         logger.info(f"New capture: {metadata.filepath.name} ({metadata.reason.value})")
@@ -190,8 +214,10 @@ class WildlifeMonitor:
         
         if self._detector and metadata.filepath.exists():
             try:
+                detection_cfg = self._config_data.get("detection", {})
+                num_frames = detection_cfg.get("num_frames", 5)
                 frames_with_boxes = self._detector.detect_video_with_images(
-                    metadata.filepath, num_frames=5
+                    metadata.filepath, num_frames=num_frames
                 )
                 
                 all_boxes = []
