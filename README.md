@@ -5,10 +5,13 @@ A Raspberry Pi-based wildlife monitoring system that detects and classifies anim
 ## Overview
 
 This system uses a PIR motion sensor and camera module connected to a Raspberry Pi to:
-- Capture 1-2 second video clips when motion is detected
+- Capture video clips when motion is detected (configurable duration)
 - Record scheduled hourly video samples
-- Analyze footage using a TorchVision neural network to identify animals
-- Provide a web UI to browse detections and view statistics
+- Gate captures to daylight hours using sunrise/sunset data
+- Classify animals using TorchVision MobileNetV3
+- Detect and annotate animals with bounding boxes using SSDLite320
+- Generate video thumbnails for the gallery view
+- Provide a web UI to browse detections, view statistics, and trigger test captures
 
 ## Architecture
 
@@ -38,10 +41,10 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 
 | Module | Status | Description |
 |--------|--------|-------------|
-| `src/capture/` | ✅ Complete | Motion detection, camera control, scheduling |
-| `src/storage/` | ✅ Complete | SQLite database, video file management |
-| `src/analysis/` | ✅ Complete | TorchVision animal classification |
-| `src/web/` | ✅ Complete | Flask web UI for viewing results |
+| `src/capture/` | ✅ Complete | Motion detection, camera control, scheduling, daylight gating |
+| `src/storage/` | ✅ Complete | SQLite database, video file management, thumbnail generation |
+| `src/analysis/` | ✅ Complete | TorchVision classification + SSDLite320 object detection with bounding boxes |
+| `src/web/` | ✅ Complete | Flask web UI with dashboard, gallery, statistics, test capture, and delete support |
 
 ## Installation
 
@@ -122,6 +125,7 @@ python main.py --port 8080 --video-dir /mnt/usb/videos --db-path /mnt/usb/wildli
 | `--capture-only` | Run capture service without web UI |
 | `--web-only` | Run web UI only (no capture) |
 | `--no-analysis` | Disable ML analysis (just record videos) |
+| `--no-detection` | Disable object detection (bounding boxes) |
 | `--simulate` | Force simulation mode (no Pi hardware required) |
 | `--analyze VIDEO` | Analyze a single video file and exit |
 | `-v, --verbose` | Enable verbose logging |
@@ -221,21 +225,21 @@ python -m src.capture.capture_service --config /path/to/config.yaml
 ```yaml
 # Motion-triggered captures
 motion:
-  video_duration: 2.5        # Duration in seconds
-  cooldown_seconds: 5.0      # Minimum time between triggers
+  video_duration: 5.0        # Duration in seconds
+  cooldown_seconds: 3.0      # Minimum time between triggers
 
-# Hourly scheduled captures  
+# Hourly scheduled captures
 hourly:
   enabled: true
   minute: 0                  # Minute of each hour (0-59)
-  video_duration: 15.0       # Duration in seconds
+  video_duration: 5.0        # Duration in seconds
 
 # 15-minute interval captures (with zoom comparison)
 interval:
-  enabled: true
+  enabled: false
   minutes: 15                # Interval in minutes
-  video_duration: 7.0        # Duration in seconds
-  zoom_levels: [1.0, 2.0]    # Capture at each zoom level
+  video_duration: 5.0        # Duration in seconds
+  zoom_levels: [1.0]         # Capture at each zoom level
 
 # Camera settings
 camera:
@@ -248,6 +252,23 @@ camera:
 hardware:
   gpio_pin: 17               # PIR sensor GPIO pin
 
+# Object detection settings
+detection:
+  enabled: true
+  score_threshold: 0.3       # Minimum confidence for bounding boxes
+  max_boxes_per_frame: 5
+  num_frames: 8              # Number of key frames to analyze
+
+# Daylight-only capture
+daylight:
+  enabled: true
+  lat: 51.5074               # Latitude (e.g. London)
+  lng: -0.1278               # Longitude
+  tzid: "Europe/London"      # Timezone identifier
+  start_offset_minutes: 20   # Start capturing this many minutes before sunrise
+  end_offset_minutes: 20     # Stop capturing this many minutes after sunset
+  fallback: "allow"          # "allow" or "deny" when sunrise API is unavailable
+
 # Output
 output:
   video_dir: "data/videos"
@@ -258,16 +279,28 @@ output:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `hardware.gpio_pin` | 17 | GPIO pin for PIR sensor |
-| `motion.video_duration` | 2.5 | Motion-triggered recording length (seconds) |
-| `motion.cooldown_seconds` | 5.0 | Minimum time between motion triggers |
-| `hourly.video_duration` | 15.0 | Hourly scheduled recording length (seconds) |
+| `motion.video_duration` | 5.0 | Motion-triggered recording length (seconds) |
+| `motion.cooldown_seconds` | 3.0 | Minimum time between motion triggers |
+| `hourly.video_duration` | 5.0 | Hourly scheduled recording length (seconds) |
 | `hourly.minute` | 0 | Minute of hour for scheduled capture |
-| `interval.video_duration` | 7.0 | Interval capture duration (seconds) |
-| `interval.zoom_levels` | [1.0, 2.0] | Zoom levels for interval captures |
+| `interval.enabled` | false | Enable interval captures |
+| `interval.video_duration` | 5.0 | Interval capture duration (seconds) |
+| `interval.zoom_levels` | [1.0] | Zoom levels for interval captures |
 | `camera.resolution` | [1280, 720] | Video resolution |
 | `camera.framerate` | 30 | Video framerate |
 | `camera.zoom_level` | 1.0 | Default digital zoom (1.0-10.0x) |
 | `camera.autofocus` | true | Enable continuous autofocus |
+| `detection.enabled` | true | Enable object detection (bounding boxes) |
+| `detection.score_threshold` | 0.3 | Minimum confidence for detected objects |
+| `detection.max_boxes_per_frame` | 5 | Maximum bounding boxes per frame |
+| `detection.num_frames` | 8 | Number of key frames to analyze per video |
+| `daylight.enabled` | true | Restrict captures to daylight hours only |
+| `daylight.lat` | — | Latitude for sunrise/sunset calculation |
+| `daylight.lng` | — | Longitude for sunrise/sunset calculation |
+| `daylight.tzid` | — | Timezone identifier (e.g. `Europe/London`) |
+| `daylight.start_offset_minutes` | 0 | Start capturing this many minutes before sunrise |
+| `daylight.end_offset_minutes` | 0 | Stop capturing this many minutes after sunset |
+| `daylight.fallback` | `allow` | Behavior when sunrise API is unavailable (`allow` or `deny`) |
 
 ### Zoom and Focus Control
 
@@ -440,6 +473,28 @@ The system will still capture videos and serve the web UI - classification can b
 
 **Note:** Model inference on Pi 4 takes ~1-2 seconds per frame with MobileNetV3.
 
+### Object Detection (Bounding Boxes)
+
+In addition to whole-image classification, the system uses SSDLite320 (MobileNetV3-Large backbone) to locate animals in video frames with bounding boxes.
+
+- COCO-pretrained: detects bird, cat, dog, horse, sheep, cow, bear, and more
+- For non-COCO animals: crops detected regions and runs the MobileNetV3 classifier for refined identification
+- Annotated key frames are saved as JPEGs in `data/annotated/<detection_id>/`
+- Bounding box data is stored in the `frame_objects` database table
+
+Object detection runs automatically after classification in the capture pipeline. Disable with:
+```bash
+python main.py --no-detection
+```
+
+## Daylight-Only Capture
+
+When enabled in `config.yaml`, captures are restricted to daylight hours using the [Sunrise-Sunset API](https://sunrise-sunset.org/api). This prevents unnecessary recordings at night.
+
+Configure your location coordinates and timezone in `config.yaml` under the `daylight` section. The `start_offset_minutes` and `end_offset_minutes` parameters allow you to extend the capture window before sunrise and after sunset.
+
+If the API is unavailable, the `fallback` setting controls whether captures are allowed (`allow`) or denied (`deny`).
+
 ## Web UI
 
 The web UI provides a browser-based interface to view detections and statistics.
@@ -472,23 +527,30 @@ python -m src.web.app
 **Pages:**
 | Page | URL | Description |
 |------|-----|-------------|
-| Dashboard | `/` | System status, today's summary, recent detections |
-| Gallery | `/gallery` | Browse all detections with filters |
-| Detection | `/detection/:id` | View video and classification results |
-| Statistics | `/statistics` | Charts of detection trends |
+| Dashboard | `/` | System status, today's summary, recent detections, test capture button |
+| Gallery | `/gallery` | Browse all detections with filters and thumbnails |
+| Detection | `/detection/:id` | View video, classification results, and annotated key frames |
+| Statistics | `/statistics` | Charts of detection trends and animal breakdowns |
 
 ### API Endpoints
 
 The web UI also exposes a REST API:
 
 ```
-GET /api/status           - System status (storage, counts)
-GET /api/detections       - List detections (with filters)
-GET /api/detections/:id   - Single detection details
-GET /api/videos           - List video files
-GET /api/stats/daily      - Daily detection counts
-GET /api/stats/animals    - Animal type breakdown
-GET /api/stats/summary    - Dashboard summary
+GET    /api/status                    - System status (storage, counts)
+GET    /api/detections                - List detections (with filters)
+GET    /api/detections/:id            - Single detection details
+GET    /api/detections/:id/objects    - Bounding box data for a detection
+DELETE /api/detections/:id            - Delete a detection and its video
+POST   /api/detections/bulk-delete    - Bulk delete detections (body: {"ids": [1,2,3]})
+POST   /api/test-capture              - Trigger on-demand test capture with analysis
+GET    /api/videos                    - List video files
+GET    /api/stats/daily               - Daily detection counts
+GET    /api/stats/animals             - Animal type breakdown
+GET    /api/stats/summary             - Dashboard summary
+GET    /videos/:filename              - Serve video files
+GET    /thumbnails/:filename          - Serve video thumbnails
+GET    /annotated/:detection_id/:file - Serve annotated frame images
 ```
 
 **Example API usage:**
@@ -501,6 +563,15 @@ curl "http://localhost:5001/api/detections?trigger_type=motion&limit=10"
 
 # Get last 7 days of stats
 curl "http://localhost:5001/api/stats/daily?days=7"
+
+# Trigger a test capture (requires full system mode, not --web-only)
+curl -X POST http://localhost:5001/api/test-capture
+
+# Delete a detection
+curl -X DELETE http://localhost:5001/api/detections/42
+
+# Get bounding box data for a detection
+curl http://localhost:5001/api/detections/42/objects
 ```
 
 ### Running in Production
@@ -529,6 +600,10 @@ pytest tests/ -v
 # Run specific test file
 pytest tests/test_database.py
 pytest tests/test_analysis.py
+pytest tests/test_detection.py
+pytest tests/test_daylight.py
+pytest tests/test_thumbnail.py
+pytest tests/test_test_capture.py
 ```
 
 ## Project Structure
@@ -541,14 +616,19 @@ wildlife-monitor/
 │   │   ├── camera.py           # Video recording
 │   │   ├── scheduler.py        # Hourly captures
 │   │   ├── config.py           # Configuration loader
+│   │   ├── daylight.py         # Sunrise/sunset daylight gating
 │   │   └── capture_service.py  # Main orchestrator
 │   ├── storage/
 │   │   ├── database.py         # SQLite operations
+│   │   ├── thumbnail.py        # Video thumbnail generation
 │   │   └── video_store.py      # Video file management
 │   ├── analysis/
 │   │   ├── model.py            # TorchVision model loading
 │   │   ├── classifier.py       # Animal classification
-│   │   └── frame_extractor.py  # Video frame extraction
+│   │   ├── frame_extractor.py  # Video frame extraction
+│   │   ├── detection_model.py  # SSDLite320 object detection model
+│   │   ├── detector.py         # Object detection orchestrator
+│   │   └── annotator.py        # Bounding box frame annotation
 │   └── web/                    # Flask web UI
 │       ├── app.py              # Flask application factory
 │       ├── api.py              # REST API endpoints
@@ -558,14 +638,20 @@ wildlife-monitor/
 │   ├── test_database.py
 │   ├── test_video_store.py
 │   ├── test_analysis.py
+│   ├── test_detection.py       # Object detection tests
+│   ├── test_daylight.py        # Daylight gating tests
+│   ├── test_thumbnail.py       # Thumbnail generation tests
+│   ├── test_test_capture.py    # On-demand capture tests
 │   ├── test_web.py
 │   └── test_integration.py
 ├── data/
 │   ├── videos/                 # Captured video clips
+│   ├── annotated/              # Annotated key-frame images
 │   └── wildlife.db             # SQLite database
 ├── main.py                     # Main entry point
 ├── config.yaml                 # Configuration file
 ├── requirements.txt
+├── requirements-pi.txt         # Raspberry Pi specific dependencies
 └── README.md
 ```
 
