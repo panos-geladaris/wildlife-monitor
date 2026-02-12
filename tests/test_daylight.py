@@ -193,10 +193,28 @@ class TestDaylightGate:
         assert transition[0] == SUNSET
         assert transition[1] is False
 
-    def test_next_transition_after_sunset(self):
+    def test_next_transition_after_sunset_returns_tomorrow_sunrise(self):
         late = datetime(2025, 6, 15, 23, 0, tzinfo=TZ)
-        gate, _ = self._make_gate(late)
+        gate, client = self._make_gate(late)
+        tomorrow_sun = SunTimes(
+            sunrise=datetime(2025, 6, 16, 4, 58, tzinfo=TZ),
+            sunset=datetime(2025, 6, 16, 21, 16, tzinfo=TZ),
+            date=date(2025, 6, 16),
+        )
+        client.fetch.return_value = tomorrow_sun
         transition = gate.next_transition()
+        assert transition is not None
+        assert transition[0] == tomorrow_sun.sunrise
+        assert transition[1] is True
+
+    def test_next_transition_after_sunset_api_failure(self):
+        late = datetime(2025, 6, 15, 23, 0, tzinfo=TZ)
+        gate, client = self._make_gate(late)
+        client.fetch.return_value = None
+        gate._cached_sun_times = SunTimes(
+            sunrise=SUNRISE, sunset=SUNSET, date=date(2025, 6, 15)
+        )
+        transition = gate.next_transition(late)
         assert transition is None
 
     def test_next_transition_with_offsets(self):
@@ -207,6 +225,19 @@ class TestDaylightGate:
         assert transition is not None
         assert transition[0] == expected
         assert transition[1] is True
+
+    def test_stale_cache_cleared_on_api_failure(self):
+        day1 = datetime(2025, 6, 15, 12, 0, tzinfo=TZ)
+        gate, client = self._make_gate(day1)
+        gate.is_capture_allowed()
+        assert gate.sun_times is not None
+
+        day2 = datetime(2025, 6, 16, 12, 0, tzinfo=TZ)
+        client.fetch.return_value = None
+        gate._now_fn = lambda: day2
+        result = gate.is_capture_allowed(day2)
+        assert gate.sun_times is None
+        assert result is True  # fallback="allow"
 
     def test_sun_times_property(self):
         midday = datetime(2025, 6, 15, 12, 0, tzinfo=TZ)
