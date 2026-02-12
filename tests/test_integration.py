@@ -194,7 +194,7 @@ class TestCaptureService:
         
         (monitor.video_dir / "test_motion.mp4").touch()
         
-        monitor._on_video_captured(metadata)
+        monitor._process_capture(metadata)
         
         detections = monitor._database.get_detections()
         assert len(detections) == 1
@@ -354,7 +354,7 @@ class TestAnalysisIntegration:
             resolution=(1280, 720),
         )
         
-        monitor._on_video_captured(metadata)
+        monitor._process_capture(metadata)
         
         detections = monitor._database.get_detections()
         assert len(detections) == 1
