@@ -92,6 +92,7 @@ class DaylightGate:
                 effective_sunset.strftime("%H:%M"),
             )
         else:
+            self._cached_sun_times = None
             logger.warning("Could not refresh sun times for %s", today.isoformat())
 
     def is_capture_allowed(self, now: Optional[datetime] = None) -> bool:
@@ -125,6 +126,13 @@ class DaylightGate:
             return (effective_sunrise, True)
         if now <= effective_sunset:
             return (effective_sunset, False)
+
+        tomorrow = now.date() + timedelta(days=1)
+        tomorrow_sun = self._client.fetch(
+            self._lat, self._lng, tomorrow, self._tzid
+        )
+        if tomorrow_sun is not None:
+            return (tomorrow_sun.sunrise - self._start_offset, True)
         return None
 
     @property
