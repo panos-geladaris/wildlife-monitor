@@ -466,6 +466,78 @@ Response 503:
 
 ---
 
+### 8. Automatic Cleanup of Empty Detections 🔲
+**Status:** Planned
+
+**Goal:** Automatically remove detections older than a configurable age where neither the classifier nor the object detector recognised any animal. This saves storage on the Pi by discarding videos that captured motion (e.g. wind, shadows, cars) but contained nothing of interest.
+
+**Definition of "empty":**
+A detection is empty when **all** of the following are true:
+- `analyzed = TRUE` (analysis has completed — never delete unprocessed videos)
+- `animal_class IS NULL OR animal_class = 'unknown'` (classifier found nothing)
+- No rows exist in `frame_objects` for that `detection_id` (detector found nothing)
+
+**What gets deleted per detection:**
+1. Database row in `detections` (cascade deletes `frame_objects` rows)
+2. Video file at `detection.video_path`
+3. Thumbnail at `data/videos/thumbnails/<video_stem>.jpg`
+4. Annotated frames directory at `data/annotated/<detection_id>/`
+
+**Config:**
+```yaml
+# Automatic cleanup of empty detections
+cleanup:
+  enabled: true
+  max_age_hours: 24          # Delete empty detections older than this
+  interval_hours: 6          # How often the cleanup job runs
+```
+
+**Architecture Fit:**
+- Reuses the existing `_cleanup_detection_artifacts()` helper in `api.py` — extract it to `src/storage/cleanup.py` so both the API delete endpoints and the scheduled cleanup can share the same logic
+- Runs on an APScheduler interval job inside `WildlifeMonitor`, alongside the existing capture scheduler
+- Daily summary is recalculated after cleanup to keep counts accurate
+
+---
+
+#### Implementation Steps
+
+**Step 1: Database query** (`src/storage/database.py`)
+- [ ] Add `get_empty_detections(before: datetime) -> list[Detection]` method
+- [ ] Query: `SELECT * FROM detections WHERE analyzed = 1 AND (animal_class IS NULL OR animal_class = 'unknown') AND timestamp < ? AND id NOT IN (SELECT DISTINCT detection_id FROM frame_objects)`
+
+**Step 2: Shared cleanup helper** (`src/storage/cleanup.py`)
+- [ ] Extract `_cleanup_detection_artifacts()` from `src/web/api.py` into a standalone function `cleanup_detection(db, detection, video_dir)` that deletes: video file, thumbnail, annotated frames dir, and DB record
+- [ ] Update `src/web/api.py` delete endpoints to call the shared helper instead of the inline version
+
+**Step 3: Cleanup service** (`src/storage/cleanup.py`)
+- [ ] Add `run_cleanup(db, video_dir, max_age_hours)` function that:
+  1. Calls `db.get_empty_detections(cutoff)` to find candidates
+  2. Calls `cleanup_detection()` for each
+  3. Calls `db.update_daily_summary()` to refresh counts
+  4. Returns count of deleted detections
+  5. Logs a summary line
+
+**Step 4: Config** (`src/capture/config.py` + `config.yaml`)
+- [ ] Add `cleanup_enabled`, `cleanup_max_age_hours`, `cleanup_interval_hours` to `CaptureServiceConfig`
+- [ ] Load from `cleanup` section in `config.yaml`
+- [ ] Add defaults: `enabled=true`, `max_age_hours=24`, `interval_hours=6`
+
+**Step 5: Integration** (`main.py`)
+- [ ] Add `_init_cleanup_scheduler()` method that schedules `run_cleanup` on an APScheduler `IntervalTrigger`
+- [ ] Call it from `start()` when cleanup is enabled
+- [ ] Shut it down in `stop()`
+- [ ] Add `--no-cleanup` CLI flag
+
+**Step 6: Tests**
+- [ ] Unit test for `get_empty_detections` — returns only analyzed detections with no animal and no frame_objects
+- [ ] Unit test for `get_empty_detections` — does not return detections that have frame_objects
+- [ ] Unit test for `get_empty_detections` — does not return unanalyzed detections
+- [ ] Unit test for `run_cleanup` — deletes video, thumbnail, annotated dir, and DB record
+- [ ] Unit test for `run_cleanup` — skips detections newer than max_age_hours
+- [ ] Integration test verifying API delete endpoints still work after extracting the shared helper
+
+---
+
 ## Future Enhancements
 
 - [ ] Live streaming view in web UI

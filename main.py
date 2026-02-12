@@ -47,6 +47,7 @@ class WildlifeMonitor:
         web_port: int = 5001,
         enable_analysis: bool = True,
         enable_detection: bool = True,
+        enable_cleanup: bool = True,
     ):
         self.config_path = config_path
         self.video_dir = video_dir or Path("data/videos")
@@ -54,11 +55,13 @@ class WildlifeMonitor:
         self.web_port = web_port
         self.enable_analysis = enable_analysis
         self.enable_detection = enable_detection
+        self.enable_cleanup = enable_cleanup
         
         self._capture_service = None
         self._classifier = None
         self._detector = None
         self._database = None
+        self._cleanup_scheduler = None
         self._web_app = None
         self._web_thread = None
         self._running = False
@@ -161,6 +164,39 @@ class WildlifeMonitor:
         
         logger.info(f"Capture service initialized (simulation={config.simulation_mode})")
     
+    def _init_cleanup_scheduler(self) -> None:
+        """Initialize scheduled cleanup of empty detections."""
+        if not self.enable_cleanup:
+            logger.info("Cleanup disabled via CLI flag, skipping")
+            return
+
+        cleanup_cfg = self._config_data.get("cleanup", {})
+        if cleanup_cfg.get("enabled") is False:
+            logger.info("Cleanup disabled in config, skipping")
+            return
+
+        max_age_hours = cleanup_cfg.get("max_age_hours", 24)
+        interval_hours = cleanup_cfg.get("interval_hours", 6)
+
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.interval import IntervalTrigger
+        from src.storage.cleanup import run_cleanup
+
+        self._cleanup_scheduler = BackgroundScheduler()
+        self._cleanup_scheduler.add_job(
+            run_cleanup,
+            trigger=IntervalTrigger(hours=interval_hours),
+            args=[self._database, self.video_dir, max_age_hours],
+            id="empty_detection_cleanup",
+            name="Empty detection cleanup",
+        )
+        self._cleanup_scheduler.start()
+
+        logger.info(
+            f"Cleanup scheduler started: max_age={max_age_hours}h, "
+            f"interval={interval_hours}h"
+        )
+
     def _on_video_captured(self, metadata) -> None:
         """Handle new video capture - run analysis in a background thread."""
         thread = threading.Thread(
@@ -291,6 +327,8 @@ class WildlifeMonitor:
             self._init_capture_service()
             self._capture_service.start()
         
+        self._init_cleanup_scheduler()
+        
         if web:
             self._start_web_server()
         
@@ -317,6 +355,9 @@ class WildlifeMonitor:
         
         if self._detector:
             self._detector.unload_model()
+        
+        if self._cleanup_scheduler and self._cleanup_scheduler.running:
+            self._cleanup_scheduler.shutdown(wait=False)
         
         if hasattr(self, '_server'):
             self._server.shutdown()
@@ -440,6 +481,11 @@ Examples:
         help="Disable object detection (bounding boxes)",
     )
     parser.add_argument(
+        "--no-cleanup",
+        action="store_true",
+        help="Disable automatic cleanup of empty detections",
+    )
+    parser.add_argument(
         "--simulate",
         action="store_true",
         help="Force simulation mode (no Pi hardware required)",
@@ -490,6 +536,7 @@ Examples:
         web_port=args.port,
         enable_analysis=not args.no_analysis,
         enable_detection=not args.no_detection,
+        enable_cleanup=not args.no_cleanup,
     )
     
     capture = not args.web_only
