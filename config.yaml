@@ -40,6 +40,12 @@ detection:
 output:
   video_dir: "data/videos"
 
+# Automatic cleanup of empty detections
+cleanup:
+  enabled: true
+  max_age_hours: 24            # Delete empty detections older than this
+  interval_hours: 6            # How often the cleanup job runs
+
 # Daylight-only capture
 daylight:
   enabled: true
