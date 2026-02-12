@@ -34,7 +34,7 @@ detection:
   enabled: true
   score_threshold: 0.3
   max_boxes_per_frame: 5
-  num_frames: 5
+  num_frames: 8
 
 # Output
 output:
