@@ -225,17 +225,20 @@ wildlife-monitor/
 │   │   ├── camera.py
 │   │   ├── scheduler.py
 │   │   ├── config.py
+│   │   ├── daylight.py
 │   │   └── capture_service.py
 │   ├── storage/           # ✅ Complete
 │   │   ├── database.py
-│   │   └── video_store.py
+│   │   ├── video_store.py
+│   │   ├── thumbnail.py
+│   │   └── cleanup.py
 │   ├── analysis/          # ✅ Complete
 │   │   ├── model.py
 │   │   ├── classifier.py
-│   │   └── frame_extractor.py
-│   ├── storage/           # ✅ Complete
-│   │   ├── database.py
-│   │   └── video_store.py
+│   │   ├── frame_extractor.py
+│   │   ├── detection_model.py
+│   │   ├── detector.py
+│   │   └── annotator.py
 │   └── web/               # ✅ Complete
 │       ├── app.py
 │       ├── api.py
@@ -250,18 +253,18 @@ wildlife-monitor/
 │           └── js/app.js
 ├── data/
 │   ├── videos/
+│   ├── annotated/
 │   └── wildlife.db
-├── models/
-│   └── (pretrained weights)
 ├── main.py                # Main entry point (integration)
+├── config.yaml.example    # Example configuration
 ├── requirements.txt
 ├── requirements-pi.txt
 ├── README.md
 └── PLAN.md
 ```
 
-### 6. Object Detection Module 🔲
-**Status:** Planned
+### 6. Object Detection Module ✅
+**Status:** Complete
 
 **Goal:** Add bounding box object detection to locate and annotate animals in video frames, complementing the existing whole-image classification.
 
@@ -346,54 +349,54 @@ Capture → DB insert → Thumbnail → Classification → Detection → Annotat
 #### Implementation Steps
 
 **Step 1: Detection Model Loader** (`src/analysis/detection_model.py`)
-- [ ] Create `DetectionModelLoader` class mirroring `ModelLoader` pattern
-- [ ] Load `ssdlite320_mobilenet_v3_large` with COCO weights
-- [ ] Implement `predict(image) -> list[dict]` returning boxes, labels, scores
-- [ ] Add COCO label mapping (id → name) for the 91 COCO classes
-- [ ] Add filtering for animal-related COCO classes only
+- [x] Create `DetectionModelLoader` class mirroring `ModelLoader` pattern
+- [x] Load `ssdlite320_mobilenet_v3_large` with COCO weights
+- [x] Implement `predict(image) -> list[dict]` returning boxes, labels, scores
+- [x] Add COCO label mapping (id → name) for the 91 COCO classes
+- [x] Add filtering for animal-related COCO classes only
 
 **Step 2: Object Detector** (`src/analysis/detector.py`)
-- [ ] Create `ObjectDetector` class with `detect_video(video_path, num_frames, score_threshold) -> dict[int, list[DetectionBox]]`
-- [ ] Reuse `FrameExtractor.extract_key_frames()` for frame selection
-- [ ] For each frame: run detection → filter by score threshold → keep top-N boxes
-- [ ] Optional crop-classify: for each box, crop region from frame and run `AnimalClassifier.classify_image()` to refine label
-- [ ] Return results keyed by frame number
+- [x] Create `ObjectDetector` class with `detect_video(video_path, num_frames, score_threshold) -> dict[int, list[DetectionBox]]`
+- [x] Reuse `FrameExtractor.extract_key_frames()` for frame selection
+- [x] For each frame: run detection → filter by score threshold → keep top-N boxes
+- [x] Optional crop-classify: for each box, crop region from frame and run `AnimalClassifier.classify_image()` to refine label
+- [x] Return results keyed by frame number
 
 **Step 3: Frame Annotator** (`src/analysis/annotator.py`)
-- [ ] Create `annotate_frame(image, boxes) -> Image` that draws rectangles + labels via OpenCV
-- [ ] Create `save_annotated_frames(detection_id, frames_with_boxes, output_dir)` to save JPEGs
-- [ ] Use color coding per animal class
+- [x] Create `annotate_frame(image, boxes) -> Image` that draws rectangles + labels via OpenCV
+- [x] Create `save_annotated_frames(detection_id, frames_with_boxes, output_dir)` to save JPEGs
+- [x] Use color coding per animal class
 
 **Step 4: Database Changes** (`src/storage/database.py`)
-- [ ] Add `frame_objects` table creation to `_init_db()`
-- [ ] Add `add_frame_objects(detection_id, boxes: list[DetectionBox])` method
-- [ ] Add `get_frame_objects(detection_id) -> list[DetectionBox]` method
-- [ ] Add `delete_frame_objects(detection_id)` for cascade cleanup
-- [ ] Update bulk delete to also clean up annotated frame files
+- [x] Add `frame_objects` table creation to `_init_db()`
+- [x] Add `add_frame_objects(detection_id, boxes: list[DetectionBox])` method
+- [x] Add `get_frame_objects(detection_id) -> list[DetectionBox]` method
+- [x] Add `delete_frame_objects(detection_id)` for cascade cleanup
+- [x] Update bulk delete to also clean up annotated frame files
 
 **Step 5: Pipeline Integration** (`main.py`)
-- [ ] Add `_init_detector()` method to `WildlifeMonitor`
-- [ ] In `_on_video_captured()`, after classification: run detection → store boxes → save annotated frames
-- [ ] Add `--no-detection` CLI flag to disable object detection
-- [ ] Update `config.yaml` with detection settings (score threshold, max boxes, num frames)
+- [x] Add `_init_detector()` method to `WildlifeMonitor`
+- [x] In `_on_video_captured()`, after classification: run detection → store boxes → save annotated frames
+- [x] Add `--no-detection` CLI flag to disable object detection
+- [x] Update `config.yaml` with detection settings (score threshold, max boxes, num frames)
 
 **Step 6: Web UI Updates**
-- [ ] Add `GET /api/detections/<id>/objects` endpoint returning bounding box JSON
-- [ ] Serve annotated frame images at `/annotated/<detection_id>/<filename>`
-- [ ] Update detection detail template to show annotated key-frame gallery below video player
-- [ ] Update `__init__.py` exports for new classes
+- [x] Add `GET /api/detections/<id>/objects` endpoint returning bounding box JSON
+- [x] Serve annotated frame images at `/annotated/<detection_id>/<filename>`
+- [x] Update detection detail template to show annotated key-frame gallery below video player
+- [x] Update `__init__.py` exports for new classes
 
 **Step 7: Tests**
-- [ ] Unit tests for `DetectionModelLoader` (model loading, dummy image inference)
-- [ ] Unit tests for `ObjectDetector` (video detection flow, crop-classify)
-- [ ] Unit tests for `annotate_frame` (output image dimensions, box drawing)
-- [ ] Integration tests for DB `frame_objects` CRUD
-- [ ] Integration tests for full pipeline (capture → detect → annotate → API)
+- [x] Unit tests for `DetectionModelLoader` (model loading, dummy image inference)
+- [x] Unit tests for `ObjectDetector` (video detection flow, crop-classify)
+- [x] Unit tests for `annotate_frame` (output image dimensions, box drawing)
+- [x] Integration tests for DB `frame_objects` CRUD
+- [x] Integration tests for full pipeline (capture → detect → annotate → API)
 
 ---
 
-### 7. On-Demand Test Capture & Analysis 🔲
-**Status:** Planned
+### 7. On-Demand Test Capture & Analysis ✅
+**Status:** Complete
 
 **Goal:** Add a button in the web UI that triggers a 4-second video capture, runs the full analysis pipeline (classification + object detection), and redirects to the detection detail page — useful for testing camera angle, lighting, and positioning.
 
@@ -437,32 +440,32 @@ Response 503:
 #### Implementation Steps
 
 **Step 1: Expose monitor instance to Flask** (`main.py`)
-- [ ] In `_start_web_server()`, store `self` on `app.config["MONITOR"]` after calling `create_app()`
+- [x] In `_start_web_server()`, store `self` on `app.config["MONITOR"]` after calling `create_app()`
 
 **Step 2: Add duration parameter to manual capture** (`src/capture/capture_service.py`)
-- [ ] Add optional `duration: float = None` parameter to `trigger_manual_capture()`
-- [ ] Pass duration to `self._camera.capture_video(duration=duration, reason=CaptureReason.MANUAL)`
+- [x] Add optional `duration: float = None` parameter to `trigger_manual_capture()`
+- [x] Pass duration to `self._camera.capture_video(duration=duration, reason=CaptureReason.MANUAL)`
 
 **Step 3: New API endpoint** (`src/web/api.py`)
-- [ ] Add `POST /api/test-capture` endpoint
-- [ ] Read `current_app.config["MONITOR"]` to access the monitor instance
-- [ ] Call `monitor._capture_service.trigger_manual_capture(duration=4.0)` to capture
-- [ ] Call `monitor._on_video_captured(metadata)` to run the full analysis pipeline
-- [ ] Query the database for the newly created detection to get classification results
-- [ ] Return `{"detection_id": id, "video_filename": ..., "animal_class": ..., "confidence": ...}`
-- [ ] Return 503 if capture service is unavailable (web-only mode)
+- [x] Add `POST /api/test-capture` endpoint
+- [x] Read `current_app.config["MONITOR"]` to access the monitor instance
+- [x] Call `monitor._capture_service.trigger_manual_capture(duration=4.0)` to capture
+- [x] Call `monitor._on_video_captured(metadata)` to run the full analysis pipeline
+- [x] Query the database for the newly created detection to get classification results
+- [x] Return `{"detection_id": id, "video_filename": ..., "animal_class": ..., "confidence": ...}`
+- [x] Return 503 if capture service is unavailable (web-only mode)
 
 **Step 4: Dashboard UI update** (`src/web/templates/index.html`)
-- [ ] Add "Test Capture" card with description and capture button
-- [ ] On click: disable button, show spinner text ("Capturing & Analyzing...")
-- [ ] POST to `/api/test-capture`
-- [ ] On success: redirect to `/detection/<detection_id>`
-- [ ] On error: show alert, re-enable button
+- [x] Add "Test Capture" card with description and capture button
+- [x] On click: disable button, show spinner text ("Capturing & Analyzing...")
+- [x] POST to `/api/test-capture`
+- [x] On success: redirect to `/detection/<detection_id>`
+- [x] On error: show alert, re-enable button
 
 **Step 5: Tests**
-- [ ] Unit test for `trigger_manual_capture(duration=4.0)` passes duration to camera
-- [ ] Integration test for `POST /api/test-capture` returns detection ID
-- [ ] Test 503 response when monitor has no capture service (web-only mode)
+- [x] Unit test for `trigger_manual_capture(duration=4.0)` passes duration to camera
+- [x] Integration test for `POST /api/test-capture` returns detection ID
+- [x] Test 503 response when monitor has no capture service (web-only mode)
 
 ---
 
