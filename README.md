@@ -214,6 +214,13 @@ python -m src.capture.scheduler
 
 ## Configuration
 
+Copy the example configuration and adjust for your location:
+
+```bash
+cp config.yaml.example config.yaml
+# Edit config.yaml with your coordinates, timezone, etc.
+```
+
 Configuration is loaded from `config.yaml` in the project root. You can also specify a custom config file:
 
 ```bash
@@ -649,7 +656,7 @@ wildlife-monitor/
 │   ├── annotated/              # Annotated key-frame images
 │   └── wildlife.db             # SQLite database
 ├── main.py                     # Main entry point
-├── config.yaml                 # Configuration file
+├── config.yaml.example         # Example configuration (copy to config.yaml)
 ├── requirements.txt
 ├── requirements-pi.txt         # Raspberry Pi specific dependencies
 └── README.md
