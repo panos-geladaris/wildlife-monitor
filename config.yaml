@@ -49,8 +49,8 @@ cleanup:
 # Daylight-only capture
 daylight:
   enabled: true
-  lat: 51.5074
-  lng: -0.1278
+  lat: 51.5074               # Set to your location latitude
+  lng: -0.1278               # Set to your location longitude
   tzid: "Europe/London"
   start_offset_minutes: 20
   end_offset_minutes: 20
