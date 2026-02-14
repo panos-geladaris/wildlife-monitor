@@ -21,6 +21,9 @@ data/*.db
 !data/.gitkeep
 !data/videos/.gitkeep
 
+# Config (contains user-specific location data)
+config.yaml
+
 # Environment
 .env
 .env.local
