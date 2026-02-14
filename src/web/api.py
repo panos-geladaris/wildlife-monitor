@@ -528,3 +528,86 @@ def test_capture():
     except Exception as e:
         logger.error(f"Test capture failed: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/timelapses")
+def list_timelapses():
+    """List timelapses, newest first."""
+    try:
+        db = get_database()
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        timelapses = db.get_timelapses(limit=limit, offset=offset)
+        return jsonify({
+            "timelapses": [
+                {
+                    "id": t.id,
+                    "date": t.date.isoformat(),
+                    "video_path": t.video_path,
+                    "video_filename": Path(t.video_path).name,
+                    "detection_count": t.detection_count,
+                    "animal_counts": t.animal_counts,
+                    "created_at": t.created_at.isoformat(),
+                }
+                for t in timelapses
+            ],
+            "count": len(timelapses),
+            "limit": limit,
+            "offset": offset,
+        })
+    except Exception as e:
+        logger.error(f"Error listing timelapses: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/timelapses/<int:timelapse_id>")
+def get_timelapse(timelapse_id: int):
+    """Get a single timelapse by ID."""
+    try:
+        db = get_database()
+        timelapse = db.get_timelapse(timelapse_id)
+        if timelapse is None:
+            return jsonify({"error": "Timelapse not found"}), 404
+        return jsonify({
+            "id": timelapse.id,
+            "date": timelapse.date.isoformat(),
+            "video_path": timelapse.video_path,
+            "video_filename": Path(timelapse.video_path).name,
+            "detection_count": timelapse.detection_count,
+            "animal_counts": timelapse.animal_counts,
+            "created_at": timelapse.created_at.isoformat(),
+        })
+    except Exception as e:
+        logger.error(f"Error getting timelapse {timelapse_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/timelapses/<int:timelapse_id>", methods=["DELETE"])
+def delete_timelapse(timelapse_id: int):
+    """Delete a timelapse and its video file."""
+    try:
+        db = get_database()
+        timelapse = db.get_timelapse(timelapse_id)
+        if timelapse is None:
+            return jsonify({"error": "Timelapse not found"}), 404
+
+        video_path = Path(timelapse.video_path)
+        video_deleted = False
+        if video_path.exists():
+            video_path.unlink()
+            video_deleted = True
+
+        thumb_path = video_path.parent / "thumbnails" / (video_path.stem + ".jpg")
+        if thumb_path.exists():
+            thumb_path.unlink()
+
+        db.delete_timelapse(timelapse_id)
+
+        return jsonify({
+            "message": "Timelapse deleted",
+            "id": timelapse_id,
+            "video_deleted": video_deleted,
+        })
+    except Exception as e:
+        logger.error(f"Error deleting timelapse {timelapse_id}: {e}")
+        return jsonify({"error": str(e)}), 500
