@@ -100,7 +100,31 @@ def create_app(
         video_dir = Path(app.config["VIDEO_DIR"]).resolve()
         annotated_dir = video_dir.parent / "annotated" / str(detection_id)
         return send_from_directory(annotated_dir.resolve(), filename)
-    
+
+    @app.route("/timelapses")
+    def timelapses():
+        """Timelapse gallery page."""
+        return render_template("timelapses.html")
+
+    @app.route("/timelapse/<int:timelapse_id>")
+    def timelapse_detail(timelapse_id: int):
+        """Timelapse detail page."""
+        return render_template("timelapse.html", timelapse_id=timelapse_id)
+
+    @app.route("/timelapse-videos/<path:filename>")
+    def serve_timelapse_video(filename: str):
+        """Serve timelapse video files."""
+        video_dir = Path(app.config["VIDEO_DIR"]).resolve()
+        timelapse_dir = video_dir.parent / "timelapses"
+        return send_from_directory(timelapse_dir.resolve(), filename)
+
+    @app.route("/timelapse-thumbnails/<path:filename>")
+    def serve_timelapse_thumbnail(filename: str):
+        """Serve timelapse thumbnail images."""
+        video_dir = Path(app.config["VIDEO_DIR"]).resolve()
+        thumb_dir = video_dir.parent / "timelapses" / "thumbnails"
+        return send_from_directory(thumb_dir.resolve(), filename)
+
     logger.info(f"Flask app created: video_dir={app.config['VIDEO_DIR']}")
     return app
 

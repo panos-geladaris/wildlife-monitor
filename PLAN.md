@@ -469,6 +469,118 @@ Response 503:
 
 ---
 
+### 9. Daily Time-Lapse Generation 🔲
+**Status:** Planned
+
+**Goal:** Every day at a configurable time (default 21:00), generate a time-lapse video from all detections captured that day. Each detection contributes one representative frame. Time-lapses are browsable in a new "Timelapses" page with a gallery view, and each timelapse links to a detail page showing the video and a summary of animals detected that day.
+
+**Data Flow:**
+```
+Daily APScheduler job (21:00)
+  → Query detections for today
+  → Extract 1 key frame per detection video (FrameExtractor)
+  → Stitch frames into MP4 with OpenCV (cv2.VideoWriter)
+  → Generate thumbnail from middle frame
+  → Insert record into `timelapses` DB table
+  → Store animal summary from constituent detections
+```
+
+**Database Schema (new table):**
+```sql
+CREATE TABLE IF NOT EXISTS timelapses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE UNIQUE NOT NULL,
+    video_path TEXT NOT NULL,
+    detection_count INTEGER DEFAULT 0,
+    animal_counts TEXT,           -- JSON
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Config:**
+```yaml
+timelapse:
+  enabled: true
+  generation_hour: 21          # Hour of day to generate (0-23)
+  generation_minute: 0         # Minute of hour
+  frame_duration: 0.5          # Seconds each frame is shown
+  resolution: [1280, 720]
+```
+
+**Web UI:**
+- New "Timelapses" link in navbar
+- Gallery page (`/timelapses`) — grid of cards with thumbnails, date, detection count, animal badges
+- Detail page (`/timelapse/<id>`) — video player + animal breakdown list + delete button
+
+**API Endpoints:**
+```
+GET    /api/timelapses          — List timelapses (paginated, newest first)
+GET    /api/timelapses/<id>     — Single timelapse detail (includes animal_counts)
+DELETE /api/timelapses/<id>     — Delete timelapse and its video file
+```
+
+---
+
+#### Implementation Steps
+
+**Step 1: Database — new table + queries** (`src/storage/database.py`)
+- [ ] Add `Timelapse` dataclass (id, date, video_path, detection_count, animal_counts, created_at)
+- [ ] Add `timelapses` table creation to `_init_db()`
+- [ ] Add `add_timelapse()` method
+- [ ] Add `get_timelapse(timelapse_id)` method
+- [ ] Add `get_timelapse_by_date(dt)` method
+- [ ] Add `get_timelapses(limit, offset)` method
+- [ ] Add `delete_timelapse(timelapse_id)` method
+
+**Step 2: Time-lapse generator** (`src/storage/timelapse.py`)
+- [ ] Create `generate_timelapse(db, video_dir, target_date)` function
+- [ ] Query all detections for the target date ordered by timestamp
+- [ ] Skip if no detections or timelapse already exists for that date
+- [ ] Extract middle frame from each detection video using `FrameExtractor`
+- [ ] Stitch frames into MP4 using `cv2.VideoWriter` (~2 fps)
+- [ ] Save to `data/timelapses/timelapse_YYYYMMDD.mp4`
+- [ ] Generate thumbnail using `generate_thumbnail()`
+- [ ] Compute `animal_counts` from constituent detections
+- [ ] Insert `Timelapse` record into DB
+- [ ] Add `run_timelapse_job(db, video_dir, target_date)` scheduler wrapper
+
+**Step 3: Config** (`config.yaml` + `src/capture/config.py`)
+- [ ] Add `timelapse` section to `config.yaml.example`
+- [ ] Read timelapse config from raw config dict in `main.py` (same pattern as cleanup)
+
+**Step 4: Scheduler integration** (`main.py`)
+- [ ] Add `_init_timelapse_scheduler()` using APScheduler `CronTrigger`
+- [ ] Add `--no-timelapse` CLI flag
+- [ ] Shut down timelapse scheduler in `stop()`
+
+**Step 5: Web UI — API endpoints** (`src/web/api.py`)
+- [ ] Add `GET /api/timelapses` endpoint (paginated, newest first)
+- [ ] Add `GET /api/timelapses/<id>` endpoint with animal_counts
+- [ ] Add `DELETE /api/timelapses/<id>` endpoint
+
+**Step 6: Web UI — Routes and templates**
+- [ ] Add `/timelapses` route → `timelapses.html` gallery page
+- [ ] Add `/timelapse/<id>` route → `timelapse.html` detail page
+- [ ] Add `/timelapse-videos/<filename>` and `/timelapse-thumbnails/<filename>` static routes
+- [ ] Add "Timelapses" link to navbar in `base.html`
+- [ ] Create `timelapses.html` template (gallery grid with thumbnails)
+- [ ] Create `timelapse.html` template (video player + animal breakdown)
+
+**Step 7: Housekeeping**
+- [ ] Add `data/timelapses/` to `.gitignore`
+- [ ] Update `src/storage/__init__.py` exports
+
+**Step 8: Tests**
+- [ ] Unit test: `generate_timelapse` creates an MP4 from mock detections
+- [ ] Unit test: `generate_timelapse` skips when no detections exist
+- [ ] Unit test: `generate_timelapse` skips when timelapse already exists for that date
+- [ ] Unit test: DB CRUD for `timelapses` table
+- [ ] Unit test: `GET /api/timelapses` returns correct data
+- [ ] Unit test: `DELETE /api/timelapses/<id>` removes video and DB record
+- [ ] Integration test: `run_timelapse_job` end-to-end
+
+---
+
 ## Future Enhancements
 
 - [ ] Live streaming view in web UI
