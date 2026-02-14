@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Timelapses - Wildlife Monitor{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Timelapses</h1>
+
+<div id="timelapseGrid" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4">
+</div>
+
+<div id="loadingSpinner" class="text-center my-4 d-none">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
+<div id="noResults" class="text-center my-4 d-none">
+    <p class="text-muted">No timelapses generated yet.</p>
+</div>
+
+<div class="text-center my-4">
+    <button id="loadMoreBtn" class="btn btn-outline-primary d-none">Load More</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const LIMIT = 50;
+let offset = 0;
+let loading = false;
+let hasMore = true;
+
+const grid = document.getElementById('timelapseGrid');
+const loadMoreBtn = document.getElementById('loadMoreBtn');
+const loadingSpinner = document.getElementById('loadingSpinner');
+const noResults = document.getElementById('noResults');
+
+function formatDate(dateStr) {
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+}
+
+function createTimelapseCard(tl) {
+    const col = document.createElement('div');
+    col.className = 'col';
+
+    const thumbName = tl.video_filename.replace(/\.[^.]+$/, '.jpg');
+
+    const animalBadges = Object.entries(tl.animal_counts || {})
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<span class="badge bg-warning text-dark">${name} (${count})</span>`)
+        .join(' ');
+
+    col.innerHTML = `
+        <div class="card h-100">
+            <a href="/timelapse/${tl.id}" class="text-decoration-none">
+                <img class="card-img-top" style="height: 180px; object-fit: cover;"
+                     src="/timelapse-thumbnails/${thumbName}"
+                     alt="Timelapse ${tl.date}"
+                     loading="lazy"
+                     onerror="this.style.display='none'">
+                <div class="card-body">
+                    <h6 class="card-title">${formatDate(tl.date)}</h6>
+                    <p class="card-text text-muted small mb-2">${tl.detection_count} detection(s)</p>
+                    <div class="d-flex gap-1 flex-wrap">
+                        ${animalBadges}
+                    </div>
+                </div>
+            </a>
+        </div>
+    `;
+    return col;
+}
+
+async function loadTimelapses(reset = false) {
+    if (loading) return;
+
+    if (reset) {
+        offset = 0;
+        hasMore = true;
+        grid.innerHTML = '';
+    }
+
+    if (!hasMore) return;
+
+    loading = true;
+    loadingSpinner.classList.remove('d-none');
+    loadMoreBtn.classList.add('d-none');
+    noResults.classList.add('d-none');
+
+    try {
+        const response = await fetch(`/api/timelapses?limit=${LIMIT}&offset=${offset}`);
+        const data = await response.json();
+        const timelapses = data.timelapses || [];
+
+        if (timelapses.length === 0 && offset === 0) {
+            noResults.classList.remove('d-none');
+        } else {
+            timelapses.forEach(tl => grid.appendChild(createTimelapseCard(tl)));
+            offset += timelapses.length;
+            hasMore = timelapses.length === LIMIT;
+            if (hasMore) loadMoreBtn.classList.remove('d-none');
+        }
+    } catch (error) {
+        console.error('Error loading timelapses:', error);
+    } finally {
+        loading = false;
+        loadingSpinner.classList.add('d-none');
+    }
+}
+
+loadMoreBtn.addEventListener('click', () => loadTimelapses(false));
+loadTimelapses();
+</script>
+{% endblock %}

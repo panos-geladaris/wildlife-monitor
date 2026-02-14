@@ -7,9 +7,9 @@ Provides database operations and video file management.
 
 def __getattr__(name: str):
     """Lazy imports to avoid circular import issues."""
-    if name in ("Database", "Detection", "DailySummary"):
-        from .database import Database, Detection, DailySummary
-        return {"Database": Database, "Detection": Detection, "DailySummary": DailySummary}[name]
+    if name in ("Database", "Detection", "DailySummary", "Timelapse"):
+        from .database import Database, Detection, DailySummary, Timelapse
+        return {"Database": Database, "Detection": Detection, "DailySummary": DailySummary, "Timelapse": Timelapse}[name]
     if name == "VideoStore":
         from .video_store import VideoStore
         return VideoStore
@@ -23,6 +23,7 @@ __all__ = [
     "Database",
     "Detection",
     "DailySummary",
+    "Timelapse",
     "VideoStore",
     "generate_thumbnail",
 ]
