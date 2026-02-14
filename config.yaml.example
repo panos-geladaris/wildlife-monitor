@@ -40,6 +40,14 @@ detection:
 output:
   video_dir: "data/videos"
 
+# Daily time-lapse generation
+timelapse:
+  enabled: true
+  generation_hour: 21            # Hour of day to generate (0-23)
+  generation_minute: 0           # Minute of hour
+  frame_duration: 0.5            # Seconds each frame is shown
+  resolution: [1280, 720]
+
 # Daylight-only capture
 daylight:
   enabled: true

@@ -39,6 +39,17 @@ class DailySummary:
     created_at: datetime = field(default_factory=datetime.now)
 
 
+@dataclass
+class Timelapse:
+    """Represents a daily time-lapse video."""
+    id: Optional[int] = None
+    date: date = field(default_factory=date.today)
+    video_path: str = ""
+    detection_count: int = 0
+    animal_counts: dict = field(default_factory=dict)
+    created_at: datetime = field(default_factory=datetime.now)
+
+
 class Database:
     """
     SQLite database manager for wildlife detections.
@@ -107,6 +118,18 @@ class Database:
 
                 CREATE INDEX IF NOT EXISTS idx_frame_objects_frame
                 ON frame_objects(detection_id, frame_number);
+
+                CREATE TABLE IF NOT EXISTS timelapses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date DATE UNIQUE NOT NULL,
+                    video_path TEXT NOT NULL,
+                    detection_count INTEGER DEFAULT 0,
+                    animal_counts TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_timelapses_date
+                ON timelapses(date);
             """)
         logger.info(f"Database initialized: {self.db_path}")
     
@@ -543,6 +566,79 @@ class Database:
                 for row in rows
             ]
     
+    # Timelapse Methods
+
+    def add_timelapse(self, timelapse: Timelapse) -> int:
+        """Add a new timelapse record. Returns the ID."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO timelapses
+                (date, video_path, detection_count, animal_counts)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    timelapse.date.isoformat(),
+                    timelapse.video_path,
+                    timelapse.detection_count,
+                    json.dumps(timelapse.animal_counts),
+                ),
+            )
+            timelapse_id = cursor.lastrowid
+            logger.debug(f"Added timelapse {timelapse_id} for {timelapse.date}")
+            return timelapse_id
+
+    def get_timelapse(self, timelapse_id: int) -> Optional[Timelapse]:
+        """Get a timelapse by ID."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM timelapses WHERE id = ?", (timelapse_id,)
+            ).fetchone()
+            if row:
+                return self._row_to_timelapse(row)
+            return None
+
+    def get_timelapse_by_date(self, dt: date) -> Optional[Timelapse]:
+        """Get a timelapse for a specific date."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM timelapses WHERE date = ?", (dt.isoformat(),)
+            ).fetchone()
+            if row:
+                return self._row_to_timelapse(row)
+            return None
+
+    def get_timelapses(self, limit: int = 50, offset: int = 0) -> list[Timelapse]:
+        """Get timelapses ordered by date descending."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM timelapses ORDER BY date DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
+            return [self._row_to_timelapse(row) for row in rows]
+
+    def delete_timelapse(self, timelapse_id: int) -> bool:
+        """Delete a timelapse record. Returns True if deleted."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM timelapses WHERE id = ?", (timelapse_id,)
+            )
+            deleted = cursor.rowcount > 0
+            if deleted:
+                logger.debug(f"Deleted timelapse {timelapse_id}")
+            return deleted
+
+    def _row_to_timelapse(self, row: sqlite3.Row) -> Timelapse:
+        """Convert a database row to Timelapse object."""
+        return Timelapse(
+            id=row["id"],
+            date=date.fromisoformat(row["date"]),
+            video_path=row["video_path"],
+            detection_count=row["detection_count"],
+            animal_counts=json.loads(row["animal_counts"]) if row["animal_counts"] else {},
+            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(),
+        )
+
     def close(self) -> None:
         """Close database (no-op for SQLite with context manager pattern)."""
         logger.info("Database closed")

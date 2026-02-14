@@ -11,7 +11,9 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 - Classify animals using TorchVision MobileNetV3
 - Detect and annotate animals with bounding boxes using SSDLite320
 - Generate video thumbnails for the gallery view
-- Provide a web UI to browse detections, view statistics, and trigger test captures
+- Automatically clean up empty detections (no animal recognised) after a configurable age
+- Generate daily time-lapse videos from the day's detections
+- Provide a web UI to browse detections, timelapses, view statistics, and trigger test captures
 
 ## Architecture
 
@@ -42,7 +44,7 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 | Module | Status | Description |
 |--------|--------|-------------|
 | `src/capture/` | ✅ Complete | Motion detection, camera control, scheduling, daylight gating |
-| `src/storage/` | ✅ Complete | SQLite database, video file management, thumbnail generation |
+| `src/storage/` | ✅ Complete | SQLite database, video file management, thumbnails, cleanup, timelapse generation |
 | `src/analysis/` | ✅ Complete | TorchVision classification + SSDLite320 object detection with bounding boxes |
 | `src/web/` | ✅ Complete | Flask web UI with dashboard, gallery, statistics, test capture, and delete support |
 
@@ -126,6 +128,8 @@ python main.py --port 8080 --video-dir /mnt/usb/videos --db-path /mnt/usb/wildli
 | `--web-only` | Run web UI only (no capture) |
 | `--no-analysis` | Disable ML analysis (just record videos) |
 | `--no-detection` | Disable object detection (bounding boxes) |
+| `--no-cleanup` | Disable automatic cleanup of empty detections |
+| `--no-timelapse` | Disable daily timelapse generation |
 | `--simulate` | Force simulation mode (no Pi hardware required) |
 | `--analyze VIDEO` | Analyze a single video file and exit |
 | `-v, --verbose` | Enable verbose logging |
@@ -279,6 +283,14 @@ daylight:
 # Output
 output:
   video_dir: "data/videos"
+
+# Daily time-lapse generation
+timelapse:
+  enabled: true
+  generation_hour: 21          # Hour of day to generate (0-23)
+  generation_minute: 0         # Minute of hour
+  frame_duration: 0.5          # Seconds each frame is shown
+  resolution: [1280, 720]
 ```
 
 ### Configuration Parameters
@@ -308,6 +320,11 @@ output:
 | `daylight.start_offset_minutes` | 0 | Start capturing this many minutes before sunrise |
 | `daylight.end_offset_minutes` | 0 | Stop capturing this many minutes after sunset |
 | `daylight.fallback` | `allow` | Behavior when sunrise API is unavailable (`allow` or `deny`) |
+| `timelapse.enabled` | true | Enable daily timelapse generation |
+| `timelapse.generation_hour` | 21 | Hour of day to generate timelapse (0-23) |
+| `timelapse.generation_minute` | 0 | Minute of hour to generate timelapse |
+| `timelapse.frame_duration` | 0.5 | Seconds each frame is shown in timelapse |
+| `timelapse.resolution` | [1280, 720] | Output timelapse video resolution |
 
 ### Zoom and Focus Control
 
@@ -502,9 +519,17 @@ Configure your location coordinates and timezone in `config.yaml` under the `day
 
 If the API is unavailable, the `fallback` setting controls whether captures are allowed (`allow`) or denied (`deny`).
 
+## Daily Timelapses
+
+The system generates a daily time-lapse video at a configurable time (default 21:00) by extracting one representative frame from each detection and stitching them into an MP4. This provides a quick visual summary of the day's wildlife activity.
+
+Timelapses are stored in `data/timelapses/` and browsable via the Timelapses page in the web UI. Each timelapse shows the video alongside a breakdown of animals detected that day.
+
+Configure the generation time and playback speed in `config.yaml` under the `timelapse` section. Disable with `--no-timelapse` or by setting `timelapse.enabled: false` in the config.
+
 ## Web UI
 
-The web UI provides a browser-based interface to view detections and statistics.
+The web UI provides a browser-based interface to view detections, timelapses, and statistics.
 
 ### Running the Web UI
 
@@ -538,6 +563,8 @@ python -m src.web.app
 | Dashboard | `/` | System status, today's summary, recent detections, test capture button |
 | Gallery | `/gallery` | Browse all detections with filters and thumbnails |
 | Detection | `/detection/:id` | View video, classification results, and annotated key frames |
+| Timelapses | `/timelapses` | Browse daily time-lapse videos with animal summaries |
+| Timelapse | `/timelapse/:id` | View timelapse video and animal breakdown |
 | Statistics | `/statistics` | Charts of detection trends and animal breakdowns |
 
 ### API Endpoints
@@ -558,7 +585,12 @@ GET    /api/stats/animals             - Animal type breakdown
 GET    /api/stats/summary             - Dashboard summary
 GET    /videos/:filename              - Serve video files
 GET    /thumbnails/:filename          - Serve video thumbnails
+GET    /api/timelapses                - List daily timelapses
+GET    /api/timelapses/:id            - Single timelapse details
+DELETE /api/timelapses/:id            - Delete a timelapse and its video
 GET    /annotated/:detection_id/:file - Serve annotated frame images
+GET    /timelapse-videos/:filename    - Serve timelapse video files
+GET    /timelapse-thumbnails/:filename - Serve timelapse thumbnails
 ```
 
 **Example API usage:**
@@ -612,6 +644,7 @@ pytest tests/test_detection.py
 pytest tests/test_daylight.py
 pytest tests/test_thumbnail.py
 pytest tests/test_test_capture.py
+pytest tests/test_timelapse.py
 ```
 
 ## Project Structure
@@ -628,7 +661,9 @@ wildlife-monitor/
 │   │   └── capture_service.py  # Main orchestrator
 │   ├── storage/
 │   │   ├── database.py         # SQLite operations
+│   │   ├── cleanup.py          # Automatic empty detection cleanup
 │   │   ├── thumbnail.py        # Video thumbnail generation
+│   │   ├── timelapse.py        # Daily time-lapse generation
 │   │   └── video_store.py      # Video file management
 │   ├── analysis/
 │   │   ├── model.py            # TorchVision model loading
@@ -650,11 +685,13 @@ wildlife-monitor/
 │   ├── test_daylight.py        # Daylight gating tests
 │   ├── test_thumbnail.py       # Thumbnail generation tests
 │   ├── test_test_capture.py    # On-demand capture tests
+│   ├── test_timelapse.py       # Timelapse generation tests
 │   ├── test_web.py
 │   └── test_integration.py
 ├── data/
 │   ├── videos/                 # Captured video clips
 │   ├── annotated/              # Annotated key-frame images
+│   ├── timelapses/             # Generated daily time-lapse videos
 │   └── wildlife.db             # SQLite database
 ├── main.py                     # Main entry point
 ├── config.yaml.example         # Example configuration (copy to config.yaml)
@@ -677,7 +714,6 @@ wildlife-monitor/
 ### Software Features
 
 - **Bird call identification** — Run BirdNET or a similar lightweight audio model to identify bird species by sound
-- **Time-lapse generation** — Stitch hourly scheduled captures into daily or weekly time-lapse videos
 - **Animal tracking across detections** — Use bounding boxes and timestamps to infer whether the same individual is returning
 - **Push notifications** — Send alerts via Telegram, Pushover, or ntfy.sh when a specific animal is detected
 - **Live MJPEG/HLS stream** — Add a `/live` page to the web UI showing the camera feed in real time

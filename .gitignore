@@ -17,6 +17,7 @@ data/videos/*.mp4
 data/videos/*.h264
 data/videos/thumbnails/
 data/annotated/
+data/timelapses/
 data/*.db
 
 # Keep data directories

@@ -47,6 +47,7 @@ class WildlifeMonitor:
         web_port: int = 5001,
         enable_analysis: bool = True,
         enable_detection: bool = True,
+        enable_timelapse: bool = True,
     ):
         self.config_path = config_path
         self.video_dir = video_dir or Path("data/videos")
@@ -54,6 +55,7 @@ class WildlifeMonitor:
         self.web_port = web_port
         self.enable_analysis = enable_analysis
         self.enable_detection = enable_detection
+        self.enable_timelapse = enable_timelapse
         
         self._capture_service = None
         self._classifier = None
@@ -61,6 +63,8 @@ class WildlifeMonitor:
         self._database = None
         self._web_app = None
         self._web_thread = None
+        self._cleanup_scheduler = None
+        self._timelapse_scheduler = None
         self._running = False
         self._simulation_mode = simulation_mode
         self._config_data = self._load_config_data()
@@ -287,6 +291,42 @@ class WildlifeMonitor:
         self._web_thread = threading.Thread(target=run_server, daemon=True)
         self._web_thread.start()
     
+    def _init_timelapse_scheduler(self) -> None:
+        """Initialize the daily timelapse generation scheduler."""
+        if not self.enable_timelapse:
+            logger.info("Timelapse disabled via CLI flag, skipping")
+            return
+
+        timelapse_cfg = self._config_data.get("timelapse", {})
+        if timelapse_cfg.get("enabled") is False:
+            logger.info("Timelapse disabled in config, skipping")
+            return
+
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.cron import CronTrigger
+        from src.storage.timelapse import run_timelapse_job
+
+        generation_hour = timelapse_cfg.get("generation_hour", 21)
+        generation_minute = timelapse_cfg.get("generation_minute", 0)
+        frame_duration = timelapse_cfg.get("frame_duration", 0.5)
+        resolution = timelapse_cfg.get("resolution", [1280, 720])
+        fps = 1.0 / frame_duration
+
+        self._timelapse_scheduler = BackgroundScheduler()
+        self._timelapse_scheduler.add_job(
+            run_timelapse_job,
+            trigger=CronTrigger(hour=generation_hour, minute=generation_minute),
+            args=[self._database, self.video_dir],
+            kwargs={"fps": fps, "resolution": tuple(resolution)},
+        )
+        self._timelapse_scheduler.start()
+
+        logger.info(
+            f"Timelapse scheduler started: generation_hour={generation_hour}, "
+            f"generation_minute={generation_minute}, frame_duration={frame_duration}, "
+            f"fps={fps}, resolution={tuple(resolution)}"
+        )
+
     def start(self, capture: bool = True, web: bool = True) -> None:
         """
         Start the wildlife monitor.
@@ -308,6 +348,7 @@ class WildlifeMonitor:
             self._init_detector()
             self._init_capture_service()
             self._capture_service.start()
+            self._init_timelapse_scheduler()
         
         if web:
             self._start_web_server()
@@ -329,6 +370,9 @@ class WildlifeMonitor:
         
         if self._capture_service:
             self._capture_service.stop()
+        
+        if self._timelapse_scheduler and self._timelapse_scheduler.running:
+            self._timelapse_scheduler.shutdown(wait=False)
         
         if self._classifier:
             self._classifier.unload_model()
@@ -458,6 +502,11 @@ Examples:
         help="Disable object detection (bounding boxes)",
     )
     parser.add_argument(
+        "--no-timelapse",
+        action="store_true",
+        help="Disable daily timelapse generation",
+    )
+    parser.add_argument(
         "--simulate",
         action="store_true",
         help="Force simulation mode (no Pi hardware required)",
@@ -508,6 +557,7 @@ Examples:
         web_port=args.port,
         enable_analysis=not args.no_analysis,
         enable_detection=not args.no_detection,
+        enable_timelapse=not args.no_timelapse,
     )
     
     capture = not args.web_only
