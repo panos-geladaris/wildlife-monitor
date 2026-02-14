@@ -532,6 +532,7 @@ python -m src.web.app
 2. Open http://192.168.1.50:5001 in your browser
 
 **Pages:**
+
 | Page | URL | Description |
 |------|-----|-------------|
 | Dashboard | `/` | System status, today's summary, recent detections, test capture button |
@@ -661,6 +662,30 @@ wildlife-monitor/
 ├── requirements-pi.txt         # Raspberry Pi specific dependencies
 └── README.md
 ```
+
+## Future Ideas
+
+### New Sensors & Hardware
+
+- **Microphone / USB audio** — Record ambient sound alongside video; use an audio classification model (e.g., BirdNET) to identify species by call, especially at night or when animals are out of frame
+- **BME280 / BME680 environmental sensor** — Log temperature, humidity, barometric pressure, and air quality per detection; correlate weather conditions with animal activity patterns
+- **IR camera module / NoIR + IR LEDs** — Enable night vision captures with a dual-camera setup or a single NoIR camera with an IR illuminator ring
+- **Ultrasonic range sensor (HC-SR04)** — Estimate animal distance and size; filter out detections that are too far away or too close
+- **Light/lux sensor (BH1750)** — More precise daylight measurement than the API; adapt camera exposure settings automatically
+- **Rain sensor** — Tag captures with weather conditions; optionally pause captures during heavy rain
+
+### Software Features
+
+- **Bird call identification** — Run BirdNET or a similar lightweight audio model to identify bird species by sound
+- **Time-lapse generation** — Stitch hourly scheduled captures into daily or weekly time-lapse videos
+- **Animal tracking across detections** — Use bounding boxes and timestamps to infer whether the same individual is returning
+- **Push notifications** — Send alerts via Telegram, Pushover, or ntfy.sh when a specific animal is detected
+- **Live MJPEG/HLS stream** — Add a `/live` page to the web UI showing the camera feed in real time
+- **Multi-camera support** — Run multiple camera modules or USB cameras, tagged by location
+- **Heatmap visualization** — Aggregate bounding box positions over time to show where animals most frequently appear
+- **Export & sharing** — Export detection data as CSV; generate shareable daily/weekly summary reports
+- **Custom model fine-tuning** — Collect labeled detections and fine-tune a classifier for the animals in your area
+- **Seasonal analytics** — Long-term trends showing which species appear in which months
 
 ## License
 
