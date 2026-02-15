@@ -125,6 +125,11 @@ def create_app(
         thumb_dir = video_dir.parent / "timelapses" / "thumbnails"
         return send_from_directory(thumb_dir.resolve(), filename)
 
+    @app.route("/environment")
+    def environment():
+        """Environment sensors page."""
+        return render_template("environment.html")
+
     logger.info(f"Flask app created: video_dir={app.config['VIDEO_DIR']}")
     return app
 

@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Environment - Wildlife Monitor{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Environment</h1>
+
+<div class="row g-4">
+    <!-- Light Sensor (LTR-559) -->
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Ambient Light</span>
+                <small class="text-muted">LTR-559</small>
+            </div>
+            <div class="card-body" id="light-card">
+                <div class="text-center text-muted py-3">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Colour Sensor (BH1745) -->
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Ambient Colour</span>
+                <small class="text-muted">BH1745</small>
+            </div>
+            <div class="card-body" id="colour-card">
+                <div class="text-center text-muted py-3">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Environment Sensor (BME688) -->
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Temperature &amp; Humidity</span>
+                <small class="text-muted">BME688</small>
+            </div>
+            <div class="card-body" id="environment-card">
+                <div class="text-center text-muted py-3">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12 text-end">
+        <small class="text-muted" id="last-updated"></small>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadEnvironment() {
+    const lightCard = document.getElementById('light-card');
+    const colourCard = document.getElementById('colour-card');
+    const envCard = document.getElementById('environment-card');
+    const lastUpdated = document.getElementById('last-updated');
+
+    try {
+        const response = await fetch('/api/environment');
+        const data = await response.json();
+
+        if (data.error) throw new Error(data.error);
+
+        // Light sensor
+        if (data.light) {
+            lightCard.innerHTML = `
+                <div class="mb-3">
+                    <div class="stat-value">${data.light.lux.toFixed(1)}</div>
+                    <div class="stat-label">Lux</div>
+                </div>
+                <ul class="list-unstyled mb-0">
+                    <li><strong>Proximity:</strong> ${data.light.proximity}</li>
+                </ul>
+            `;
+        } else {
+            lightCard.innerHTML = '<p class="text-muted mb-0">Sensor not connected</p>';
+        }
+
+        // Colour sensor
+        if (data.colour) {
+            const maxVal = Math.max(data.colour.red, data.colour.green, data.colour.blue, 1);
+            const scale = 255 / maxVal;
+            const r = Math.min(255, Math.round(data.colour.red * scale));
+            const g = Math.min(255, Math.round(data.colour.green * scale));
+            const b = Math.min(255, Math.round(data.colour.blue * scale));
+            const swatchColour = `rgb(${r}, ${g}, ${b})`;
+
+            colourCard.innerHTML = `
+                <div class="d-flex align-items-center mb-3">
+                    <div style="width: 48px; height: 48px; border-radius: 0.5rem; background: ${swatchColour}; border: 1px solid #dee2e6;" class="me-3"></div>
+                    <div>
+                        <div class="stat-label">Detected Colour</div>
+                    </div>
+                </div>
+                <ul class="list-unstyled mb-0">
+                    <li><strong>Red:</strong> ${data.colour.red}</li>
+                    <li><strong>Green:</strong> ${data.colour.green}</li>
+                    <li><strong>Blue:</strong> ${data.colour.blue}</li>
+                    <li><strong>Clear:</strong> ${data.colour.clear}</li>
+                </ul>
+            `;
+        } else {
+            colourCard.innerHTML = '<p class="text-muted mb-0">Sensor not connected</p>';
+        }
+
+        // Environment sensor
+        if (data.environment) {
+            envCard.innerHTML = `
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="stat-value">${data.environment.temperature.toFixed(1)}°C</div>
+                        <div class="stat-label">Temperature</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-value">${data.environment.humidity.toFixed(1)}%</div>
+                        <div class="stat-label">Humidity</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            envCard.innerHTML = '<p class="text-muted mb-0">Sensor not connected</p>';
+        }
+
+        // Connected sensors badge
+        const sensorCount = data.available_sensors ? data.available_sensors.length : 0;
+        lastUpdated.textContent = `${sensorCount} sensor${sensorCount !== 1 ? 's' : ''} connected · Last updated: ${new Date().toLocaleTimeString()}`;
+
+    } catch (error) {
+        const errorHtml = `<div class="text-danger">Error: ${error.message}</div>`;
+        lightCard.innerHTML = errorHtml;
+        colourCard.innerHTML = errorHtml;
+        envCard.innerHTML = errorHtml;
+    }
+}
+
+// Initial load
+loadEnvironment();
+
+// Auto-refresh every 10 seconds
+setInterval(loadEnvironment, 10000);
+</script>
+{% endblock %}

@@ -581,6 +581,177 @@ DELETE /api/timelapses/<id>     — Delete timelapse and its video file
 
 ---
 
+### 10. Environment Sensors — Test & Monitoring Page ✅
+**Status:** Complete
+
+**Goal:** Add a standalone "Environment" page to the web UI that reads live values from three Breakout Garden I²C sensors (LTR-559, BH1745, BME688) for testing and monitoring before integrating sensor data into the capture pipeline.
+
+**Hardware:** Pimoroni Breakout Garden HAT (I²C + SPI) with:
+- LTR-559 Light & Proximity Sensor Breakout
+- BH1745 Luminance & Colour Sensor Breakout
+- BME688 Environmental Sensor Breakout
+
+**Components:**
+- `src/sensors/__init__.py` — Module package
+- `src/sensors/reader.py` — `SensorReader` class with graceful per-sensor fallback (each sensor is optional; if the library isn't installed or the hardware isn't connected, that sensor returns None)
+
+**Sensor Readings Displayed:**
+- **LTR-559:** Ambient light level (lux) and proximity value
+- **BH1745:** R, G, B, Clear raw channel values with a normalised colour swatch
+- **BME688:** Temperature (°C) and humidity (%)
+
+**Web UI:**
+- New "Environment" page at `/environment` with auto-refresh every 10 seconds
+- Three Bootstrap cards showing each sensor's current reading
+- "Sensor not connected" message when a sensor is unavailable
+- Connected sensor count and last-updated timestamp
+
+**API:**
+```
+GET /api/environment — Read current values from all connected sensors
+```
+
+**Dependencies (Pi only):**
+- `ltr559>=0.1.1`
+- `bh1745>=0.0.5`
+- `bme680>=1.0.5`
+- `smbus2>=0.4.1`
+
+**Design Decisions:**
+- `SensorReader` is lazily initialised on first API call and cached in `app.config["SENSOR_READER"]`
+- No database storage — this is a live read-only view for testing
+- No config.yaml changes — sensors are auto-detected at init time
+- Each sensor fails independently; one broken sensor doesn't affect the others
+
+---
+
+### 11. LTR-559 Light & Proximity Sensor 🔲
+**Status:** Planned
+**Hardware:** Pimoroni LTR-559 Light & Proximity Sensor Breakout (I²C)
+**Library:** `ltr559` (pip)
+
+**Goal:** Replace the Sunrise-Sunset API-only daylight gating with real-time ambient light readings from the LTR-559. This gives accurate, location-independent daylight detection that adapts to actual conditions (cloud cover, shade, storms) rather than relying on calculated sunrise/sunset times.
+
+**Features:**
+- **Real-time daylight gating** — read lux value before each capture; skip if below configurable threshold (e.g., < 50 lux = too dark)
+- **Hybrid mode** — use the sensor as primary, fall back to the API when sensor is unavailable
+- **Exposure hints** — pass the lux reading to the camera module to help with auto-exposure
+- **Log lux per detection** — store the ambient light level in the `detections` table for correlation analysis
+- **Proximity as close-range trigger** — optionally use the IR proximity channel (~5–10 cm range) as a secondary trigger for animals very close to the sensor (e.g., bird on a feeder mounted next to the Pi)
+
+**Database Changes:**
+- Add `lux_level REAL` column to `detections` table
+
+**Config:**
+```yaml
+sensors:
+  ltr559:
+    enabled: true
+    daylight_threshold_lux: 50     # Below this = too dark to capture
+    use_proximity_trigger: false   # Use proximity as secondary motion trigger
+    proximity_threshold: 100       # Proximity value to trigger (0-65535)
+```
+
+**Implementation Notes:**
+- Both sensors connect via I²C (SDA/SCL on GPIO 2/3) — no extra GPIO pins needed
+- Hardware not yet connected — requires case/setup change (see Hardware Setup Notes below)
+- The `src/capture/daylight.py` module will need a sensor-backed alternative to the API check
+
+---
+
+### 12. BH1745 Luminance & Colour Sensor 🔲
+**Status:** Planned
+**Hardware:** Pimoroni BH1745 Luminance and Colour Sensor Breakout (I²C)
+**Library:** `bh1745` (pip)
+
+**Goal:** Log ambient colour temperature and luminance data per detection to correlate lighting conditions with classification accuracy. The RGB + Clear channels provide richer environmental context than a simple lux reading.
+
+**Features:**
+- **Ambient colour logging** — record R, G, B, Clear channel values per detection
+- **Colour temperature estimation** — derive approximate colour temperature (warm/cool) from RGB ratios
+- **Scene-change detection** — monitor for sudden shifts in colour/luminance as an additional motion trigger (shadow of animal passing, etc.)
+- **Lighting quality tags** — auto-tag detections with lighting conditions (golden hour, overcast, direct sun, shade) based on colour ratios
+- **Web UI integration** — show lighting conditions on the detection detail page; filter gallery by lighting quality
+
+**Database Changes:**
+- Add `ambient_r INTEGER, ambient_g INTEGER, ambient_b INTEGER, ambient_clear INTEGER` columns to `detections` table (or a separate `sensor_readings` table)
+
+**Config:**
+```yaml
+sensors:
+  bh1745:
+    enabled: true
+    log_per_detection: true          # Record colour data with each detection
+    scene_change_trigger: false      # Use colour shift as motion trigger
+    scene_change_threshold: 0.3      # Fractional change in luminance to trigger
+```
+
+**Implementation Notes:**
+- Shares the I²C bus with the LTR-559 (different I²C address) — both can run simultaneously
+- Hardware not yet connected — requires case/setup change (see Hardware Setup Notes below)
+
+---
+
+### 13. BME688 Environmental Sensor 🔲
+**Status:** Planned
+**Hardware:** Pimoroni BME688 Breakout (I²C, plugs into Breakout Garden)
+**Library:** `bme680` or `pimoroni-bme68x` (pip)
+
+**Goal:** Log temperature, humidity, barometric pressure, and air quality (gas resistance) per detection. Correlate environmental conditions with animal activity patterns over time.
+
+**Features:**
+- **Environmental logging per detection** — record temperature (°C), humidity (%), pressure (hPa), and gas resistance (Ω) alongside each capture
+- **Weather correlation analysis** — identify patterns like "more bird visits on warm, humid mornings" or "fox activity increases when pressure drops"
+- **Web UI dashboard widget** — show current environmental readings on the dashboard
+- **Statistics integration** — add environmental overlays to the daily detection charts (e.g., temperature curve alongside detection counts)
+- **Capture gating (optional)** — skip captures during extreme conditions (e.g., very high humidity suggesting rain/fog that would produce unusable video)
+
+**Database Changes:**
+- Add `temperature REAL, humidity REAL, pressure REAL, gas_resistance REAL` columns to `detections` table
+
+**Config:**
+```yaml
+sensors:
+  bme688:
+    enabled: true
+    log_per_detection: true
+    dashboard_widget: true           # Show live readings on web dashboard
+    capture_gating: false            # Optionally skip captures in bad conditions
+    max_humidity_percent: 95         # Skip capture above this humidity (if gating enabled)
+```
+
+**Implementation Notes:**
+- Plugs into an I²C slot on the Breakout Garden HAT alongside the LTR-559 and BH1745
+- The gas sensor needs a ~5 minute warm-up period after power-on for stable readings; temperature/humidity/pressure are immediate
+- Pairs well with the BH1745 colour data for rich environmental context per detection
+
+---
+
+### Hardware Setup Notes
+
+**Available hardware:** Pimoroni Breakout Garden HAT (I²C + SPI) — both the LTR-559 and BH1745 plug directly into I²C slots on the HAT with no soldering or wiring required.
+
+**Current constraint:** The Pi Camera Hut case (from The Pi Hut) only fits the Pi, camera module, and PIR sensor. The Breakout Garden HAT adds height on top of the GPIO header and won't fit inside the case with the lid on.
+
+**Wiring:** The PIR sensor (5V/GND/GPIO 17 — pins 2, 6, 11) and the I²C bus (3.3V/SDA/SCL/GND — pins 1, 3, 5, 9) use completely different pins, so both can be connected to the GPIO header simultaneously with no conflict. A 40-pin ribbon cable would block the PIR wires, so avoid that approach.
+
+**Recommended setup:** Run 4 jumper wires (3.3V, SDA, SCL, GND) from the Pi's GPIO header out through the Camera Hut case's cable cutout to the Breakout Garden HAT positioned next to the case. Plug the LTR-559, BH1745, and BME688 into the HAT's I²C slots. The PIR stays wired inside the case as-is.
+
+| Wire   | Pi GPIO Pin | Breakout Garden HAT |
+|--------|-------------|---------------------|
+| 3.3V   | Pin 1       | 3V3                 |
+| SDA    | Pin 3       | SDA                 |
+| SCL    | Pin 5       | SCL                 |
+| GND    | Pin 9       | GND                 |
+
+**Alternative options:**
+
+1. **Stacking header, open-top** — Mount a GPIO stacking header on the Pi so the Breakout Garden HAT sits on top. PIR wires connect to the pass-through pins underneath. Remove or leave off the Camera Hut lid to accommodate the extra height. Simple but leaves the Pi less protected.
+
+2. **Larger case** — Replace the Camera Hut with a bigger enclosure (e.g., generic Pi 4 project box) that fits the full HAT stack. Mount the camera and PIR externally using a longer CSI flex cable (200–300mm) and jumper wires. Most room for future sensors but requires re-mounting everything.
+
+---
+
 ## Future Enhancements
 
 - [ ] Live streaming view in web UI

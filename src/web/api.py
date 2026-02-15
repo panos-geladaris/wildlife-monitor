@@ -611,3 +611,21 @@ def delete_timelapse(timelapse_id: int):
     except Exception as e:
         logger.error(f"Error deleting timelapse {timelapse_id}: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/environment")
+def get_environment():
+    """Read current values from all connected Breakout Garden sensors."""
+    try:
+        reader = current_app.config.get("SENSOR_READER")
+        if reader is None:
+            from src.sensors.reader import SensorReader
+            reader = SensorReader()
+            current_app.config["SENSOR_READER"] = reader
+
+        data = reader.read_all()
+        data["available_sensors"] = reader.available_sensors
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"Error reading sensors: {e}")
+        return jsonify({"error": str(e)}), 500
