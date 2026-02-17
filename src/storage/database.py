@@ -450,7 +450,32 @@ class Database:
         with self._get_connection() as conn:
             row = conn.execute(query, params).fetchone()
             return row[0]
-    
+
+    def get_empty_detections(self, before: datetime) -> list["Detection"]:
+        """
+        Get analyzed detections with no recognised animal that are older than *before*.
+
+        A detection is "empty" when:
+        - analyzed = TRUE
+        - animal_class IS NULL OR animal_class = 'unknown'
+        - No rows exist in frame_objects for that detection_id
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM detections
+                WHERE analyzed = 1
+                  AND (animal_class IS NULL OR animal_class = 'unknown')
+                  AND timestamp < ?
+                  AND id NOT IN (
+                      SELECT DISTINCT detection_id FROM frame_objects
+                  )
+                ORDER BY timestamp ASC
+                """,
+                (before.isoformat(),),
+            ).fetchall()
+            return [self._row_to_detection(row) for row in rows]
+
     def _row_to_detection(self, row: sqlite3.Row) -> Detection:
         """Convert a database row to Detection object."""
         return Detection(

@@ -270,6 +270,12 @@ detection:
   max_boxes_per_frame: 5
   num_frames: 8              # Number of key frames to analyze
 
+# Automatic cleanup of empty detections
+cleanup:
+  enabled: true
+  max_age_hours: 24          # Delete empty detections older than this
+  interval_hours: 6          # How often the cleanup job runs
+
 # Daylight-only capture
 daylight:
   enabled: true
@@ -313,6 +319,9 @@ timelapse:
 | `detection.score_threshold` | 0.3 | Minimum confidence for detected objects |
 | `detection.max_boxes_per_frame` | 5 | Maximum bounding boxes per frame |
 | `detection.num_frames` | 8 | Number of key frames to analyze per video |
+| `cleanup.enabled` | true | Enable automatic cleanup of empty detections |
+| `cleanup.max_age_hours` | 24 | Minimum age (hours) before an empty detection is removed |
+| `cleanup.interval_hours` | 6 | How often the cleanup job runs |
 | `daylight.enabled` | true | Restrict captures to daylight hours only |
 | `daylight.lat` | — | Latitude for sunrise/sunset calculation |
 | `daylight.lng` | — | Longitude for sunrise/sunset calculation |
@@ -527,6 +536,17 @@ Timelapses are stored in `data/timelapses/` and browsable via the Timelapses pag
 
 Configure the generation time and playback speed in `config.yaml` under the `timelapse` section. Disable with `--no-timelapse` or by setting `timelapse.enabled: false` in the config.
 
+## Automatic Cleanup of Empty Detections
+
+The system automatically removes detections where neither the classifier nor the object detector recognised any animal, once they are older than a configurable threshold (default: 24 hours). This saves storage on the Pi by discarding videos triggered by wind, shadows, or passing cars.
+
+A detection is considered "empty" when all of the following are true:
+- Analysis has completed (`analyzed = true`)
+- No animal was classified (`animal_class` is null or `unknown`)
+- No objects were detected in any frame (no `frame_objects` rows)
+
+When an empty detection is removed, its video file, thumbnail, annotated frames directory, and database record are all deleted. The cleanup job runs on a configurable interval (default: every 6 hours) and can be disabled with `--no-cleanup` or by setting `cleanup.enabled: false` in `config.yaml`.
+
 ## Web UI
 
 The web UI provides a browser-based interface to view detections, timelapses, and statistics.
@@ -645,6 +665,7 @@ pytest tests/test_daylight.py
 pytest tests/test_thumbnail.py
 pytest tests/test_test_capture.py
 pytest tests/test_timelapse.py
+pytest tests/test_cleanup.py
 ```
 
 ## Project Structure
