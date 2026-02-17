@@ -141,10 +141,15 @@ class WildlifeMonitor:
         
         try:
             from src.analysis import ObjectDetector
+            tile_cols = detection_cfg.get("tile_cols", 1)
+            tile_rows = detection_cfg.get("tile_rows", 1)
             self._detector = ObjectDetector(
                 score_threshold=detection_cfg.get("score_threshold", 0.3),
                 max_boxes_per_frame=detection_cfg.get("max_boxes_per_frame", 5),
                 classify_crops=True,
+                tile_grid=(tile_cols, tile_rows),
+                tile_overlap=detection_cfg.get("tile_overlap", 0.2),
+                nms_iou_threshold=detection_cfg.get("nms_iou_threshold", 0.5),
             )
             self._detector.load_model()
             logger.info("Object detector initialized")

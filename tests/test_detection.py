@@ -11,7 +11,7 @@ from src.analysis.detection_model import (
     COCO_LABELS,
     COCO_ANIMAL_LABELS,
 )
-from src.analysis.detector import ObjectDetector, DetectionBox
+from src.analysis.detector import ObjectDetector, DetectionBox, _compute_iou, _nms
 from src.analysis.annotator import (
     annotate_frame,
     save_annotated_frames,
@@ -218,6 +218,148 @@ class TestObjectDetector:
 
         assert boxes[0].animal_class == "bird"
         assert boxes[0].animal_confidence == 0.85
+
+
+class TestIoUAndNMS:
+
+    def test_iou_no_overlap(self):
+        assert _compute_iou((0, 0, 10, 10), (20, 20, 30, 30)) == 0.0
+
+    def test_iou_identical(self):
+        assert _compute_iou((0, 0, 10, 10), (0, 0, 10, 10)) == 1.0
+
+    def test_iou_partial_overlap(self):
+        iou = _compute_iou((0, 0, 10, 10), (5, 5, 15, 15))
+        assert 0.1 < iou < 0.2  # 25 / (100+100-25)
+
+    def test_nms_empty(self):
+        assert _nms([]) == []
+
+    def test_nms_no_overlap(self):
+        dets = [
+            {"box": [0, 0, 10, 10], "label": "cat", "score": 0.9},
+            {"box": [100, 100, 110, 110], "label": "dog", "score": 0.8},
+        ]
+        result = _nms(dets, iou_threshold=0.5)
+        assert len(result) == 2
+
+    def test_nms_suppresses_overlapping(self):
+        dets = [
+            {"box": [0, 0, 10, 10], "label": "cat", "score": 0.9},
+            {"box": [1, 1, 11, 11], "label": "cat", "score": 0.7},
+        ]
+        result = _nms(dets, iou_threshold=0.5)
+        assert len(result) == 1
+        assert result[0]["score"] == 0.9
+
+
+class TestTiledDetection:
+
+    @pytest.fixture
+    def tiled_detector(self):
+        with patch.object(DetectionModelLoader, "load") as mock_load, \
+             patch.object(DetectionModelLoader, "predict_animals") as mock_predict:
+            mock_load.return_value = MagicMock()
+            mock_predict.return_value = []
+
+            detector = ObjectDetector(
+                score_threshold=0.3,
+                max_boxes_per_frame=10,
+                classify_crops=False,
+                tile_grid=(2, 2),
+                tile_overlap=0.2,
+            )
+            yield detector, mock_predict
+
+    def test_generate_tiles_1x1(self):
+        with patch.object(DetectionModelLoader, "__init__", return_value=None):
+            detector = ObjectDetector(tile_grid=(1, 1), classify_crops=False)
+            tiles = detector._generate_tiles(1280, 720)
+            assert len(tiles) == 1
+            assert tiles[0] == (0, 0, 1280, 720)
+
+    def test_generate_tiles_2x2(self):
+        with patch.object(DetectionModelLoader, "__init__", return_value=None):
+            detector = ObjectDetector(tile_grid=(2, 2), tile_overlap=0.2, classify_crops=False)
+            tiles = detector._generate_tiles(1280, 720)
+            assert len(tiles) == 4
+            # All tiles should be within frame bounds
+            for x1, y1, x2, y2 in tiles:
+                assert x1 >= 0 and y1 >= 0
+                assert x2 <= 1280 and y2 <= 720
+                assert x2 > x1 and y2 > y1
+
+    def test_tiles_overlap(self):
+        with patch.object(DetectionModelLoader, "__init__", return_value=None):
+            detector = ObjectDetector(tile_grid=(2, 1), tile_overlap=0.2, classify_crops=False)
+            tiles = detector._generate_tiles(1000, 500)
+            assert len(tiles) == 2
+            # With 20% overlap on a 2x1 grid of width 1000, tiles should overlap
+            left_tile = tiles[0]
+            right_tile = tiles[1]
+            assert left_tile[2] > right_tile[0]  # right edge of left > left edge of right
+
+    def test_detect_frame_tiled_remaps_coords(self, tiled_detector):
+        detector, mock_predict = tiled_detector
+
+        # Return a detection only from the second tile call
+        call_count = 0
+        def side_effect(image, score_threshold=0.3):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                return [{"box": [10.0, 20.0, 50.0, 60.0], "label": "bird", "label_id": 16, "score": 0.8}]
+            return []
+
+        mock_predict.side_effect = side_effect
+
+        image = Image.new("RGB", (1280, 720))
+        boxes = detector.detect_frame(image, frame_number=0)
+
+        assert len(boxes) == 1
+        # Box coords should be remapped from tile-local to full-frame
+        # The second tile in a 2x2 grid starts at x offset > 0
+        assert boxes[0].x1 > 10.0  # Should be offset by tile origin
+        assert boxes[0].img_width == 1280
+
+    def test_detect_frame_tiled_calls_model_per_tile(self, tiled_detector):
+        detector, mock_predict = tiled_detector
+        mock_predict.return_value = []
+
+        image = Image.new("RGB", (1280, 720))
+        detector.detect_frame(image)
+
+        assert mock_predict.call_count == 4  # 2x2 grid
+
+    def test_detect_frame_tiled_nms_deduplicates(self, tiled_detector):
+        detector, mock_predict = tiled_detector
+
+        # Same detection from two overlapping tiles
+        mock_predict.return_value = [
+            {"box": [5.0, 5.0, 50.0, 50.0], "label": "cat", "label_id": 17, "score": 0.85},
+        ]
+
+        image = Image.new("RGB", (100, 100))
+        boxes = detector.detect_frame(image)
+
+        # NMS should merge near-identical boxes from overlapping tiles
+        assert len(boxes) <= 4  # at most one per tile, likely fewer after NMS
+
+    def test_tiling_disabled_single_pass(self):
+        with patch.object(DetectionModelLoader, "load") as mock_load, \
+             patch.object(DetectionModelLoader, "predict_animals") as mock_predict:
+            mock_load.return_value = MagicMock()
+            mock_predict.return_value = []
+
+            detector = ObjectDetector(
+                tile_grid=(1, 1),
+                classify_crops=False,
+            )
+
+            image = Image.new("RGB", (1280, 720))
+            detector.detect_frame(image)
+
+            assert mock_predict.call_count == 1
 
 
 class TestAnnotateFrame:

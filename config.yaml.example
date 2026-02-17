@@ -35,6 +35,13 @@ detection:
   score_threshold: 0.3
   max_boxes_per_frame: 5
   num_frames: 8
+  # Tiled detection: split frames into a grid of overlapping tiles so that
+  # small/distant animals occupy enough pixels for the 320×320 model.
+  # (1, 1) = disabled (single-pass, fastest).  (2, 2) = 4 tiles (recommended).
+  tile_cols: 2                   # Horizontal tiles (1 = no tiling)
+  tile_rows: 2                   # Vertical tiles (1 = no tiling)
+  tile_overlap: 0.2              # Fractional overlap between tiles (0.0-0.5)
+  nms_iou_threshold: 0.5         # IoU threshold for merging duplicate detections
 
 # Output
 output:

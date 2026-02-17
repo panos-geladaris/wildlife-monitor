@@ -1,5 +1,9 @@
 """
 Object detector for wildlife videos using SSDLite320 + MobileNetV3-Large.
+
+Supports tiled detection: splits high-resolution frames into overlapping
+tiles so that small/distant animals occupy enough pixels for the 320×320
+model to recognise them.
 """
 
 import logging
@@ -13,6 +17,43 @@ from .detection_model import DetectionModelLoader, COCO_ANIMAL_LABELS
 from .frame_extractor import FrameExtractor
 
 logger = logging.getLogger(__name__)
+
+
+def _compute_iou(box_a: tuple, box_b: tuple) -> float:
+    """Compute Intersection over Union between two (x1, y1, x2, y2) boxes."""
+    x1 = max(box_a[0], box_b[0])
+    y1 = max(box_a[1], box_b[1])
+    x2 = min(box_a[2], box_b[2])
+    y2 = min(box_a[3], box_b[3])
+
+    inter = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    if inter == 0:
+        return 0.0
+
+    area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
+    area_b = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
+    return inter / (area_a + area_b - inter)
+
+
+def _nms(detections: list[dict], iou_threshold: float = 0.5) -> list[dict]:
+    """Apply greedy Non-Maximum Suppression across detections."""
+    if not detections:
+        return []
+
+    detections = sorted(detections, key=lambda d: d["score"], reverse=True)
+    keep: list[dict] = []
+
+    for det in detections:
+        box = det["box"]
+        suppress = False
+        for kept in keep:
+            if _compute_iou(box, kept["box"]) > iou_threshold:
+                suppress = True
+                break
+        if not suppress:
+            keep.append(det)
+
+    return keep
 
 
 @dataclass
@@ -56,6 +97,9 @@ class ObjectDetector:
     DEFAULT_SCORE_THRESHOLD = 0.3
     DEFAULT_FRAMES_TO_ANALYZE = 5
     DEFAULT_MAX_BOXES_PER_FRAME = 5
+    DEFAULT_TILE_GRID = (1, 1)
+    DEFAULT_TILE_OVERLAP = 0.2
+    DEFAULT_NMS_IOU_THRESHOLD = 0.5
 
     def __init__(
         self,
@@ -63,17 +107,25 @@ class ObjectDetector:
         max_boxes_per_frame: int = DEFAULT_MAX_BOXES_PER_FRAME,
         device: Optional[str] = None,
         classify_crops: bool = True,
+        tile_grid: tuple[int, int] = DEFAULT_TILE_GRID,
+        tile_overlap: float = DEFAULT_TILE_OVERLAP,
+        nms_iou_threshold: float = DEFAULT_NMS_IOU_THRESHOLD,
     ):
         self.score_threshold = score_threshold
         self.max_boxes_per_frame = max_boxes_per_frame
         self.classify_crops = classify_crops
+        self.tile_grid = tile_grid
+        self.tile_overlap = tile_overlap
+        self.nms_iou_threshold = nms_iou_threshold
         self._model_loader = DetectionModelLoader(device=device)
         self._classifier = None
         self._model_loaded = False
 
+        tiling_enabled = tile_grid != (1, 1)
         logger.info(
             f"ObjectDetector initialized: threshold={score_threshold}, "
-            f"max_boxes={max_boxes_per_frame}, classify_crops={classify_crops}"
+            f"max_boxes={max_boxes_per_frame}, classify_crops={classify_crops}, "
+            f"tiling={'%dx%d overlap=%.0f%%' % (tile_grid[0], tile_grid[1], tile_overlap * 100) if tiling_enabled else 'off'}"
         )
 
     def load_model(self) -> None:
@@ -112,12 +164,66 @@ class ObjectDetector:
             box.animal_class = result.animal_class
             box.animal_confidence = result.confidence
 
+    def _generate_tiles(
+        self, width: int, height: int
+    ) -> list[tuple[int, int, int, int]]:
+        """Generate overlapping tile regions as (x1, y1, x2, y2) in pixel coords."""
+        cols, rows = self.tile_grid
+        overlap = self.tile_overlap
+
+        tile_w = width / cols
+        tile_h = height / rows
+        pad_w = tile_w * overlap / 2
+        pad_h = tile_h * overlap / 2
+
+        tiles = []
+        for r in range(rows):
+            for c in range(cols):
+                x1 = max(0, int(c * tile_w - pad_w))
+                y1 = max(0, int(r * tile_h - pad_h))
+                x2 = min(width, int((c + 1) * tile_w + pad_w))
+                y2 = min(height, int((r + 1) * tile_h + pad_h))
+                tiles.append((x1, y1, x2, y2))
+
+        return tiles
+
+    def _detect_tiled(
+        self, image: Image.Image
+    ) -> list[dict]:
+        """Run detection on each tile, remap coords to full frame, then NMS."""
+        w, h = image.size
+        tiles = self._generate_tiles(w, h)
+        all_detections: list[dict] = []
+
+        for tx1, ty1, tx2, ty2 in tiles:
+            tile_img = image.crop((tx1, ty1, tx2, ty2))
+            tile_dets = self._model_loader.predict_animals(
+                tile_img, score_threshold=self.score_threshold
+            )
+
+            for det in tile_dets:
+                box = det["box"]
+                det["box"] = [
+                    box[0] + tx1,
+                    box[1] + ty1,
+                    box[2] + tx1,
+                    box[3] + ty1,
+                ]
+                all_detections.append(det)
+
+        return _nms(all_detections, iou_threshold=self.nms_iou_threshold)
+
     def detect_frame(
         self, image: Image.Image, frame_number: int = 0, frame_timestamp: float = 0.0
     ) -> list[DetectionBox]:
-        raw = self._model_loader.predict_animals(
-            image, score_threshold=self.score_threshold
-        )
+        tiling_enabled = self.tile_grid != (1, 1)
+
+        if tiling_enabled:
+            raw = self._detect_tiled(image)
+        else:
+            raw = self._model_loader.predict_animals(
+                image, score_threshold=self.score_threshold
+            )
 
         raw.sort(key=lambda d: d["score"], reverse=True)
         raw = raw[: self.max_boxes_per_frame]
