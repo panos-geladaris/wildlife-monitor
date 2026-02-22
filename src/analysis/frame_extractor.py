@@ -119,8 +119,17 @@ class FrameExtractor:
         ret, frame = self._cap.read()
         
         if not ret or frame is None:
-            logger.warning(f"Failed to extract frame {frame_number}")
-            return None
+            # Seek-based extraction can fail with interframe codecs (e.g. H.264)
+            # where only keyframes are seekable. Fall back to sequential read.
+            logger.debug(f"Seek failed for frame {frame_number}, trying sequential read")
+            self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            for i in range(frame_number + 1):
+                ret, frame = self._cap.read()
+                if not ret:
+                    break
+            if not ret or frame is None:
+                logger.warning(f"Failed to extract frame {frame_number}")
+                return None
         
         # Convert BGR to RGB and create PIL Image
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
