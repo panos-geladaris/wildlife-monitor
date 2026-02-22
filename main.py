@@ -155,6 +155,24 @@ class WildlifeMonitor:
             logger.warning(f"Failed to initialize detector: {e}")
             self._detector = None
     
+    def _init_audio_recorder(self):
+        """Initialize the audio recorder if enabled in config."""
+        audio_cfg = self._config_data.get("audio", {})
+        if not audio_cfg.get("enabled", False):
+            return None
+
+        if self._detect_simulation_mode():
+            logger.info("Audio recording skipped in simulation mode")
+            return None
+
+        from src.capture.audio_recorder import AudioRecorder
+        recorder = AudioRecorder(
+            device=audio_cfg.get("device", AudioRecorder.DEFAULT_DEVICE),
+            sample_rate=audio_cfg.get("sample_rate", AudioRecorder.DEFAULT_SAMPLE_RATE),
+        )
+        logger.info(f"Audio recorder initialized (device={recorder.device})")
+        return recorder
+
     def _init_capture_service(self) -> None:
         """Initialize the capture service."""
         from src.capture import CaptureService, load_config
@@ -163,7 +181,8 @@ class WildlifeMonitor:
         config.video_output_dir = self.video_dir
         config.simulation_mode = self._detect_simulation_mode()
         
-        self._capture_service = CaptureService(config)
+        audio_recorder = self._init_audio_recorder()
+        self._capture_service = CaptureService(config, audio_recorder=audio_recorder)
         self._capture_service.on_capture(self._on_video_captured)
         
         logger.info(f"Capture service initialized (simulation={config.simulation_mode})")
@@ -300,6 +319,17 @@ class WildlifeMonitor:
                             )
             except Exception as e:
                 logger.error(f"Object detection failed for {metadata.filepath}: {e}")
+        
+        # Mux audio into video if an animal was detected, otherwise discard it
+        if metadata.audio_path and metadata.audio_path.exists():
+            det = self._database.get_detection(detection_id)
+            animal_found = det and det.animal_class and det.animal_class != "unknown"
+            if animal_found:
+                from src.capture.audio_mux import mux_audio
+                mux_audio(metadata.filepath, metadata.audio_path)
+            else:
+                metadata.audio_path.unlink(missing_ok=True)
+                logger.debug("No animal detected, audio discarded")
         
         self._database.update_daily_summary()
     

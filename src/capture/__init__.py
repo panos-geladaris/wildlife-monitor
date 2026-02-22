@@ -25,6 +25,9 @@ def __getattr__(name: str):
     if name in ("SunTimes", "SunriseSunsetClient", "DaylightGate"):
         from .daylight import SunTimes, SunriseSunsetClient, DaylightGate
         return {"SunTimes": SunTimes, "SunriseSunsetClient": SunriseSunsetClient, "DaylightGate": DaylightGate}[name]
+    if name == "AudioRecorder":
+        from .audio_recorder import AudioRecorder
+        return AudioRecorder
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -42,4 +45,5 @@ __all__ = [
     "SunTimes",
     "SunriseSunsetClient",
     "DaylightGate",
+    "AudioRecorder",
 ]
