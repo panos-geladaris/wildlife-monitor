@@ -29,6 +29,12 @@ camera:
 hardware:
   gpio_pin: 17               # PIR sensor GPIO pin
 
+# Audio recording (USB microphone)
+audio:
+  enabled: false
+  device: "plughw:1,0"          # ALSA device (run `arecord -l` to find yours)
+  sample_rate: 44100
+
 # Object detection settings
 detection:
   enabled: true
