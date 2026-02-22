@@ -87,8 +87,22 @@ def generate_timelapse(
     output_path = timelapse_dir / filename
 
     width, height = resolution
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
+    # Use H.264 codec for browser-compatible MP4 playback.
+    # "avc1" works on macOS (VideoToolbox); fall back to "X264" on Linux.
+    writer = None
+    for codec in ("avc1", "X264", "mp4v"):
+        fourcc = cv2.VideoWriter_fourcc(*codec)
+        writer = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
+        if writer.isOpened():
+            if codec == "mp4v":
+                logger.warning("H.264 codec not available; timelapse may not play in browser")
+            break
+        writer.release()
+        writer = None
+
+    if writer is None:
+        logger.error("No suitable video codec available for timelapse generation")
+        return None
 
     try:
         import numpy as np
