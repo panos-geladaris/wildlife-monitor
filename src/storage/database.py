@@ -26,6 +26,7 @@ class Detection:
     animal_class: Optional[str] = None
     confidence: Optional[float] = None
     analyzed: bool = False
+    highlighted: bool = False
     created_at: datetime = field(default_factory=datetime.now)
 
 
@@ -131,6 +132,16 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_timelapses_date
                 ON timelapses(date);
             """)
+
+            # Add highlighted column if it doesn't exist yet
+            columns = [
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(detections)").fetchall()
+            ]
+            if "highlighted" not in columns:
+                conn.execute(
+                    "ALTER TABLE detections ADD COLUMN highlighted BOOLEAN DEFAULT FALSE"
+                )
         logger.info(f"Database initialized: {self.db_path}")
     
     @contextmanager
@@ -476,6 +487,26 @@ class Database:
             ).fetchall()
             return [self._row_to_detection(row) for row in rows]
 
+    def set_highlighted(self, detection_id: int, highlighted: bool) -> bool:
+        """Set the highlighted flag on a detection. Returns True if updated."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE detections SET highlighted = ? WHERE id = ?",
+                (highlighted, detection_id),
+            )
+            return cursor.rowcount > 0
+
+    def get_highlighted_detections(
+        self, limit: int = 100, offset: int = 0
+    ) -> list["Detection"]:
+        """Get all highlighted detections, newest first."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM detections WHERE highlighted = 1 ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
+            return [self._row_to_detection(row) for row in rows]
+
     def _row_to_detection(self, row: sqlite3.Row) -> Detection:
         """Convert a database row to Detection object."""
         return Detection(
@@ -486,6 +517,7 @@ class Database:
             animal_class=row["animal_class"],
             confidence=row["confidence"],
             analyzed=bool(row["analyzed"]),
+            highlighted=bool(row["highlighted"]) if row["highlighted"] is not None else False,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(),
         )
     
