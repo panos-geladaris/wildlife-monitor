@@ -1,0 +1,15 @@
+[Unit]
+Description=Wildlife Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/wildlife-monitor
+ExecStart=/home/pi/wildlife-monitor/venv/bin/python main.py
+Restart=on-failure
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
