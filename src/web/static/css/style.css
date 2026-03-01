@@ -365,3 +365,65 @@
 .no-select {
     user-select: none;
 }
+
+/* ============================================
+   Dark Mode Overrides
+   ============================================ */
+
+[data-bs-theme="dark"] body {
+    background-color: #1a1a2e;
+    color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .stat-card {
+    background-color: #16213e;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+[data-bs-theme="dark"] .stat-card .stat-label {
+    color: #9ca3af;
+}
+
+[data-bs-theme="dark"] .gallery-filters {
+    background: #16213e;
+}
+
+[data-bs-theme="dark"] .activity-item {
+    border-bottom-color: #2d2d44;
+}
+
+[data-bs-theme="dark"] .detection-card {
+    background-color: #16213e;
+}
+
+[data-bs-theme="dark"] .detection-card:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+[data-bs-theme="dark"] .detection-card .detection-meta {
+    color: #9ca3af;
+}
+
+[data-bs-theme="dark"] .loading-spinner {
+    border-color: #2d2d44;
+    border-top-color: #6366f1;
+}
+
+[data-bs-theme="dark"] .confidence-meter {
+    background: #2d2d44;
+}
+
+[data-bs-theme="dark"] .status-badge.status-active {
+    background-color: #064e3b;
+    color: #6ee7b7;
+}
+
+[data-bs-theme="dark"] .status-badge.status-inactive {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+}
+
+[data-bs-theme="dark"] .status-badge.status-pending {
+    background-color: #78350f;
+    color: #fcd34d;
+}
