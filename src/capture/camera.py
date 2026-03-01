@@ -35,6 +35,7 @@ class VideoMetadata:
     duration_seconds: float
     reason: CaptureReason
     resolution: tuple[int, int]
+    audio_path: Optional[Path] = None
 
 
 class Camera:
@@ -57,7 +58,8 @@ class Camera:
         resolution: tuple[int, int] = DEFAULT_RESOLUTION,
         framerate: int = DEFAULT_FRAMERATE,
         default_duration: float = DEFAULT_DURATION,
-        simulation_mode: bool = False
+        simulation_mode: bool = False,
+        audio_recorder=None,
     ):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -66,6 +68,7 @@ class Camera:
         self.framerate = framerate
         self.default_duration = default_duration
         self.simulation_mode = simulation_mode or not PICAMERA_AVAILABLE
+        self._audio_recorder = audio_recorder
         
         self._camera: Optional[Picamera2] = None
         self._is_recording = False
@@ -180,6 +183,11 @@ class Camera:
         logger.info(f"Starting {duration}s video capture: {filepath.name}")
         self._is_recording = True
         
+        audio_path = None
+        if self._audio_recorder and not self.simulation_mode:
+            wav_path = filepath.with_suffix(".wav")
+            audio_path = self._audio_recorder.start(wav_path, duration)
+        
         try:
             if self.simulation_mode:
                 self._simulate_recording(filepath, duration)
@@ -188,12 +196,16 @@ class Camera:
         finally:
             self._is_recording = False
         
+        if self._audio_recorder and audio_path:
+            audio_path = self._audio_recorder.wait()
+        
         metadata = VideoMetadata(
             filepath=filepath,
             timestamp=start_time,
             duration_seconds=duration,
             reason=reason,
-            resolution=self.resolution
+            resolution=self.resolution,
+            audio_path=audio_path,
         )
         
         logger.info(f"Video saved: {filepath.name}")

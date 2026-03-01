@@ -24,7 +24,7 @@ class CaptureService:
     - All captures are logged and can trigger callbacks
     """
     
-    def __init__(self, config: CaptureServiceConfig):
+    def __init__(self, config: CaptureServiceConfig, audio_recorder=None):
         self.config = config
         
         self._camera = Camera(
@@ -32,7 +32,8 @@ class CaptureService:
             resolution=config.resolution,
             framerate=config.framerate,
             default_duration=config.video_duration,
-            simulation_mode=config.simulation_mode
+            simulation_mode=config.simulation_mode,
+            audio_recorder=audio_recorder,
         )
         
         if config.zoom_level != 1.0:
