@@ -150,6 +150,56 @@ python main.py
 
 The system will auto-detect Pi hardware and run with real camera and PIR sensor.
 
+### Deploying to the Pi
+
+A systemd service and deploy script are provided for production use.
+
+**First-time setup on the Pi:**
+
+```bash
+# Clone the repo and create a virtual environment
+cd /home/pi
+git clone <repo-url> wildlife-monitor
+cd wildlife-monitor
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt -r requirements-pi.txt
+cp config.yaml.example config.yaml
+# Edit config.yaml with your location, timezone, etc.
+
+# Install and start the systemd service
+sudo cp scripts/wildlife-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable wildlife-monitor
+sudo systemctl start wildlife-monitor
+```
+
+**Deploying updates from your dev machine:**
+
+After merging a feature branch, run the deploy script to update the Pi:
+
+```bash
+# Deploy to a Pi reachable as "pi" (default)
+./scripts/deploy.sh
+
+# Deploy to a specific host
+./scripts/deploy.sh mypi.local
+
+# Custom user
+PI_USER=admin ./scripts/deploy.sh mypi.local
+```
+
+The script SSHs into the Pi, pulls the latest code, installs dependencies, and restarts the service.
+
+**Useful systemd commands on the Pi:**
+
+```bash
+sudo systemctl status wildlife-monitor   # Check status
+sudo systemctl stop wildlife-monitor     # Stop the service
+sudo systemctl restart wildlife-monitor  # Restart
+journalctl -u wildlife-monitor -f        # Follow logs
+```
+
 ## Running the Capture Module
 
 ### Simulation Mode (Laptop/Desktop)
