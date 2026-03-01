@@ -60,14 +60,18 @@
                         </tbody>
                     </table>
                     <hr>
-                    <button id="deleteBtn" class="btn btn-danger btn-sm" onclick="deleteDetection()">
-                        Delete Detection
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button id="highlightBtn" class="btn btn-outline-warning btn-sm" onclick="toggleHighlight()">
+                            &#9733; Highlight
+                        </button>
+                        <button id="deleteBtn" class="btn btn-danger btn-sm" onclick="deleteDetection()">
+                            Delete Detection
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-
     <div id="annotatedFramesSection" class="d-none mt-4">
         <div class="card">
             <div class="card-header">
@@ -153,6 +157,8 @@ async function loadDetection() {
             document.getElementById('animalRow').classList.remove('d-none');
         }
         
+        updateHighlightButton(detection.highlighted);
+
         spinner.classList.add('d-none');
         content.classList.remove('d-none');
 
@@ -162,6 +168,33 @@ async function loadDetection() {
         console.error('Error loading detection:', error);
         spinner.classList.add('d-none');
         errorMsg.classList.remove('d-none');
+    }
+}
+
+function updateHighlightButton(highlighted) {
+    const btn = document.getElementById('highlightBtn');
+    if (highlighted) {
+        btn.className = 'btn btn-warning btn-sm';
+        btn.innerHTML = '&#9733; Highlighted';
+    } else {
+        btn.className = 'btn btn-outline-warning btn-sm';
+        btn.innerHTML = '&#9733; Highlight';
+    }
+}
+
+async function toggleHighlight() {
+    try {
+        const response = await fetch(`/api/detections/${detectionId}/highlight`, {
+            method: 'POST',
+        });
+        const data = await response.json();
+        if (response.ok) {
+            updateHighlightButton(data.highlighted);
+        } else {
+            alert('Failed to toggle highlight: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error toggling highlight: ' + error.message);
     }
 }
 

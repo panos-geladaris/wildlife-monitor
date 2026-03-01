@@ -336,3 +336,75 @@ class TestApiStats:
         assert "trigger_type" in recent
         assert "animal_class" in recent
         assert "confidence" in recent
+
+
+class TestHighlightsApi:
+    """Tests for highlights API endpoints."""
+
+    def test_highlights_page_returns_200(self, client):
+        """Test GET /highlights returns 200."""
+        response = client.get("/highlights")
+        assert response.status_code == 200
+
+    def test_toggle_highlight_on(self, client, sample_detections):
+        """Test POST /api/detections/<id>/highlight toggles on."""
+        det_id = sample_detections[0].id
+        response = client.post(f"/api/detections/{det_id}/highlight")
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data["highlighted"] is True
+
+    def test_toggle_highlight_off(self, client, sample_detections):
+        """Test toggling highlight off after it was on."""
+        det_id = sample_detections[0].id
+        client.post(f"/api/detections/{det_id}/highlight")
+        response = client.post(f"/api/detections/{det_id}/highlight")
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data["highlighted"] is False
+
+    def test_toggle_highlight_not_found(self, client):
+        """Test toggling highlight on non-existent detection."""
+        response = client.post("/api/detections/9999/highlight")
+        assert response.status_code == 404
+
+    def test_list_highlights_empty(self, client):
+        """Test GET /api/highlights with no highlighted detections."""
+        response = client.get("/api/highlights")
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data["detections"] == []
+
+    def test_list_highlights_with_data(self, client, sample_detections):
+        """Test GET /api/highlights returns only highlighted detections."""
+        client.post(f"/api/detections/{sample_detections[0].id}/highlight")
+        client.post(f"/api/detections/{sample_detections[2].id}/highlight")
+
+        response = client.get("/api/highlights")
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data["count"] == 2
+        ids = {d["id"] for d in data["detections"]}
+        assert sample_detections[0].id in ids
+        assert sample_detections[2].id in ids
+
+    def test_detection_includes_highlighted_field(self, client, sample_detections):
+        """Test that detection API responses include the highlighted field."""
+        det_id = sample_detections[0].id
+        response = client.get(f"/api/detections/{det_id}")
+        data = response.get_json()
+
+        assert "highlighted" in data
+        assert data["highlighted"] is False
+
+    def test_detections_list_includes_highlighted(self, client, sample_detections):
+        """Test that detections list includes highlighted field."""
+        response = client.get("/api/detections")
+        data = response.get_json()
+
+        for d in data["detections"]:
+            assert "highlighted" in d

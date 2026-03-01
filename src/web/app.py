@@ -65,6 +65,11 @@ def create_app(
         """Detection detail page."""
         return render_template("detection.html", detection_id=detection_id)
     
+    @app.route("/highlights")
+    def highlights():
+        """Highlights page."""
+        return render_template("highlights.html")
+
     @app.route("/statistics")
     def statistics():
         """Statistics page."""
