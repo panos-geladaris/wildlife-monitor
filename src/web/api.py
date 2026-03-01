@@ -139,6 +139,7 @@ def list_detections():
                     "animal_class": d.animal_class,
                     "confidence": d.confidence,
                     "analyzed": d.analyzed,
+                    "highlighted": d.highlighted,
                 }
                 for d in detections
             ],
@@ -175,10 +176,67 @@ def get_detection(detection_id: int):
             "animal_class": detection.animal_class,
             "confidence": detection.confidence,
             "analyzed": detection.analyzed,
+            "highlighted": detection.highlighted,
             "created_at": detection.created_at.isoformat(),
         })
     except Exception as e:
         logger.error(f"Error getting detection {detection_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/detections/<int:detection_id>/highlight", methods=["POST"])
+def toggle_highlight(detection_id: int):
+    """Toggle the highlighted flag on a detection."""
+    try:
+        db = get_database()
+        detection = db.get_detection(detection_id)
+
+        if detection is None:
+            return jsonify({"error": "Detection not found"}), 404
+
+        new_state = not detection.highlighted
+        db.set_highlighted(detection_id, new_state)
+
+        return jsonify({
+            "id": detection_id,
+            "highlighted": new_state,
+        })
+    except Exception as e:
+        logger.error(f"Error toggling highlight {detection_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/highlights")
+def list_highlights():
+    """List highlighted detections, newest first."""
+    try:
+        db = get_database()
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+
+        detections = db.get_highlighted_detections(limit=limit, offset=offset)
+
+        return jsonify({
+            "detections": [
+                {
+                    "id": d.id,
+                    "timestamp": d.timestamp.isoformat(),
+                    "video_path": d.video_path,
+                    "video_filename": Path(d.video_path).name,
+                    "trigger_type": d.trigger_type,
+                    "animal_class": d.animal_class,
+                    "confidence": d.confidence,
+                    "analyzed": d.analyzed,
+                    "highlighted": d.highlighted,
+                }
+                for d in detections
+            ],
+            "count": len(detections),
+            "limit": limit,
+            "offset": offset,
+        })
+    except Exception as e:
+        logger.error(f"Error listing highlights: {e}")
         return jsonify({"error": str(e)}), 500
 
 

@@ -547,6 +547,10 @@ A detection is considered "empty" when all of the following are true:
 
 When an empty detection is removed, its video file, thumbnail, annotated frames directory, and database record are all deleted. The cleanup job runs on a configurable interval (default: every 6 hours) and can be disabled with `--no-cleanup` or by setting `cleanup.enabled: false` in `config.yaml`.
 
+## Highlights
+
+Any detection can be marked as a highlight from its detail page using the ★ button, regardless of trigger type or whether an animal was recognised. Highlighted detections are shown with a star icon in the gallery and collected in a dedicated Highlights page (`/highlights`) for easy access. Highlights can also be deleted directly from that page.
+
 ## Web UI
 
 The web UI provides a browser-based interface to view detections, timelapses, and statistics.
@@ -583,6 +587,7 @@ python -m src.web.app
 | Dashboard | `/` | System status, today's summary, recent detections, test capture button |
 | Gallery | `/gallery` | Browse all detections with filters and thumbnails |
 | Detection | `/detection/:id` | View video, classification results, and annotated key frames |
+| Highlights | `/highlights` | Browse and manage highlighted detections |
 | Timelapses | `/timelapses` | Browse daily time-lapse videos with animal summaries |
 | Timelapse | `/timelapse/:id` | View timelapse video and animal breakdown |
 | Statistics | `/statistics` | Charts of detection trends and animal breakdowns |
@@ -598,7 +603,9 @@ GET    /api/detections/:id            - Single detection details
 GET    /api/detections/:id/objects    - Bounding box data for a detection
 DELETE /api/detections/:id            - Delete a detection and its video
 POST   /api/detections/bulk-delete    - Bulk delete detections (body: {"ids": [1,2,3]})
+POST   /api/detections/:id/highlight   - Toggle highlight on a detection
 POST   /api/test-capture              - Trigger on-demand test capture with analysis
+GET    /api/highlights                 - List highlighted detections
 GET    /api/videos                    - List video files
 GET    /api/stats/daily               - Daily detection counts
 GET    /api/stats/animals             - Animal type breakdown

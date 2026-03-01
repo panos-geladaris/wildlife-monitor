@@ -308,6 +308,77 @@ class TestBulkDelete:
         assert db.get_detection(detection_id) is None
 
 
+class TestHighlights:
+    """Tests for highlight functionality."""
+
+    def test_default_not_highlighted(self, db, sample_detection):
+        """Test that new detections are not highlighted by default."""
+        detection_id = db.add_detection(sample_detection)
+        detection = db.get_detection(detection_id)
+        assert detection.highlighted is False
+
+    def test_set_highlighted(self, db, sample_detection):
+        """Test setting a detection as highlighted."""
+        detection_id = db.add_detection(sample_detection)
+        result = db.set_highlighted(detection_id, True)
+        assert result is True
+
+        detection = db.get_detection(detection_id)
+        assert detection.highlighted is True
+
+    def test_unset_highlighted(self, db, sample_detection):
+        """Test removing highlight from a detection."""
+        detection_id = db.add_detection(sample_detection)
+        db.set_highlighted(detection_id, True)
+        db.set_highlighted(detection_id, False)
+
+        detection = db.get_detection(detection_id)
+        assert detection.highlighted is False
+
+    def test_set_highlighted_not_found(self, db):
+        """Test highlighting a non-existent detection."""
+        result = db.set_highlighted(9999, True)
+        assert result is False
+
+    def test_get_highlighted_detections(self, db):
+        """Test retrieving only highlighted detections."""
+        id1 = db.add_detection(Detection(
+            timestamp=datetime.now(),
+            video_path="/data/videos/a.mp4",
+            trigger_type="motion",
+        ))
+        id2 = db.add_detection(Detection(
+            timestamp=datetime.now(),
+            video_path="/data/videos/b.mp4",
+            trigger_type="scheduled",
+        ))
+        id3 = db.add_detection(Detection(
+            timestamp=datetime.now(),
+            video_path="/data/videos/c.mp4",
+            trigger_type="motion",
+        ))
+
+        db.set_highlighted(id1, True)
+        db.set_highlighted(id3, True)
+
+        highlights = db.get_highlighted_detections()
+        assert len(highlights) == 2
+        highlight_ids = {d.id for d in highlights}
+        assert id1 in highlight_ids
+        assert id3 in highlight_ids
+        assert id2 not in highlight_ids
+
+    def test_get_highlighted_detections_empty(self, db):
+        """Test retrieving highlights when none exist."""
+        db.add_detection(Detection(
+            timestamp=datetime.now(),
+            video_path="/data/videos/a.mp4",
+            trigger_type="motion",
+        ))
+        highlights = db.get_highlighted_detections()
+        assert highlights == []
+
+
 class TestDailySummary:
     """Tests for daily summary functionality."""
     
