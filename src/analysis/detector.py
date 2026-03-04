@@ -29,6 +29,7 @@ class DetectionBox:
     frame_timestamp: float
     animal_class: Optional[str] = None
     animal_confidence: Optional[float] = None
+    bird_species: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -44,6 +45,7 @@ class DetectionBox:
             "frame_timestamp": self.frame_timestamp,
             "animal_class": self.animal_class,
             "animal_confidence": self.animal_confidence,
+            "bird_species": self.bird_species,
         }
 
 
@@ -111,6 +113,7 @@ class ObjectDetector:
         if result.is_animal:
             box.animal_class = result.animal_class
             box.animal_confidence = result.confidence
+            box.bird_species = result.bird_species
 
     def detect_frame(
         self, image: Image.Image, frame_number: int = 0, frame_timestamp: float = 0.0

@@ -88,8 +88,9 @@ function createDetectionCard(detection) {
         ? `${(detection.confidence * 100).toFixed(1)}%` 
         : '';
     
+    const speciesInfo = detection.bird_species ? ` (${detection.bird_species})` : '';
     const animalInfo = detection.animal_class 
-        ? `<span class="badge bg-warning text-dark">${detection.animal_class} ${confidence}</span>`
+        ? `<span class="badge bg-warning text-dark">${detection.animal_class}${speciesInfo} ${confidence}</span>`
         : '';
 
     const starIcon = detection.highlighted

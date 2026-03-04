@@ -156,6 +156,9 @@ async function loadDetection() {
             document.getElementById('detectionAnimal').textContent = detection.animal_class + confidence;
             document.getElementById('animalRow').classList.remove('d-none');
         }
+        if (detection.bird_species) {
+            document.getElementById('detectionAnimal').textContent += ` (${detection.bird_species})`;
+        }
         
         updateHighlightButton(detection.highlighted);
 

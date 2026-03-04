@@ -142,13 +142,14 @@ async function loadSummary() {
             const rows = data.recent_detections.map(d => {
                 const time = new Date(d.timestamp).toLocaleString();
                 const animal = d.animal_class || '-';
+                const species = d.bird_species ? ` (${d.bird_species})` : '';
                 const confidence = d.confidence ? `${(d.confidence * 100).toFixed(0)}%` : '-';
                 return `
                     <tr>
                         <td><a href="/detection/${d.id}">#${d.id}</a></td>
                         <td>${time}</td>
                         <td>${d.trigger_type}</td>
-                        <td>${animal}</td>
+                        <td>${animal}${species}</td>
                         <td>${confidence}</td>
                     </tr>
                 `;

@@ -25,6 +25,7 @@ class Detection:
     trigger_type: str = "manual"  # 'motion', 'scheduled', 'manual'
     animal_class: Optional[str] = None
     confidence: Optional[float] = None
+    bird_species: Optional[str] = None
     analyzed: bool = False
     highlighted: bool = False
     created_at: datetime = field(default_factory=datetime.now)
@@ -142,6 +143,22 @@ class Database:
                 conn.execute(
                     "ALTER TABLE detections ADD COLUMN highlighted BOOLEAN DEFAULT FALSE"
                 )
+
+            # Add bird_species column to detections if it doesn't exist yet
+            if "bird_species" not in columns:
+                conn.execute(
+                    "ALTER TABLE detections ADD COLUMN bird_species TEXT"
+                )
+
+            # Add bird_species column to frame_objects if it doesn't exist yet
+            fo_columns = [
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(frame_objects)").fetchall()
+            ]
+            if "bird_species" not in fo_columns:
+                conn.execute(
+                    "ALTER TABLE frame_objects ADD COLUMN bird_species TEXT"
+                )
         logger.info(f"Database initialized: {self.db_path}")
     
     @contextmanager
@@ -170,8 +187,8 @@ class Database:
             cursor = conn.execute(
                 """
                 INSERT INTO detections 
-                (timestamp, video_path, trigger_type, animal_class, confidence, analyzed)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (timestamp, video_path, trigger_type, animal_class, confidence, bird_species, analyzed)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     detection.timestamp.isoformat(),
@@ -179,6 +196,7 @@ class Database:
                     detection.trigger_type,
                     detection.animal_class,
                     detection.confidence,
+                    detection.bird_species,
                     detection.analyzed,
                 )
             )
@@ -262,6 +280,7 @@ class Database:
         animal_class: Optional[str] = None,
         confidence: Optional[float] = None,
         analyzed: Optional[bool] = None,
+        bird_species: Optional[str] = None,
     ) -> bool:
         """
         Update a detection record.
@@ -283,6 +302,10 @@ class Database:
         if analyzed is not None:
             updates.append("analyzed = ?")
             params.append(analyzed)
+        
+        if bird_species is not None:
+            updates.append("bird_species = ?")
+            params.append(bird_species)
         
         if not updates:
             return False
@@ -357,8 +380,8 @@ class Database:
                 """
                 INSERT INTO frame_objects
                 (detection_id, frame_number, frame_timestamp, label, score,
-                 x1, y1, x2, y2, img_width, img_height, animal_class, animal_confidence)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 x1, y1, x2, y2, img_width, img_height, animal_class, animal_confidence, bird_species)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -375,6 +398,7 @@ class Database:
                         b.get("img_height"),
                         b.get("animal_class"),
                         b.get("animal_confidence"),
+                        b.get("bird_species"),
                     )
                     for b in boxes
                 ],
@@ -516,6 +540,7 @@ class Database:
             trigger_type=row["trigger_type"],
             animal_class=row["animal_class"],
             confidence=row["confidence"],
+            bird_species=row["bird_species"] if "bird_species" in row.keys() else None,
             analyzed=bool(row["analyzed"]),
             highlighted=bool(row["highlighted"]) if row["highlighted"] is not None else False,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(),

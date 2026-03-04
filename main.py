@@ -256,12 +256,14 @@ class WildlifeMonitor:
                     detection_id,
                     animal_class=result.animal_class,
                     confidence=result.confidence,
+                    bird_species=result.bird_species,
                     analyzed=True,
                 )
                 
                 if result.is_animal:
+                    species_info = f" ({result.bird_species})" if result.bird_species else ""
                     logger.info(
-                        f"Detected: {result.animal_class} "
+                        f"Detected: {result.animal_class}{species_info} "
                         f"({result.confidence:.1%})"
                     )
                 else:
@@ -312,6 +314,7 @@ class WildlifeMonitor:
                                 detection_id,
                                 animal_class=best_box.animal_class,
                                 confidence=best_box.animal_confidence,
+                                bird_species=best_box.bird_species,
                             )
                             logger.info(
                                 f"Updated animal from detector: "
