@@ -150,14 +150,13 @@ async function loadDetection() {
         document.getElementById('detectionAnalyzed').innerHTML = analyzedBadge;
         
         if (detection.animal_class) {
+            const emoji = WildlifeMonitor.getAnimalIcon(detection.animal_class);
             const confidence = detection.confidence 
                 ? ` (${(detection.confidence * 100).toFixed(1)}% confidence)` 
                 : '';
-            document.getElementById('detectionAnimal').textContent = detection.animal_class + confidence;
+            const species = detection.bird_species ? ` (${detection.bird_species})` : '';
+            document.getElementById('detectionAnimal').textContent = emoji + ' ' + detection.animal_class + species + confidence;
             document.getElementById('animalRow').classList.remove('d-none');
-        }
-        if (detection.bird_species) {
-            document.getElementById('detectionAnimal').textContent += ` (${detection.bird_species})`;
         }
         
         updateHighlightButton(detection.highlighted);
@@ -193,11 +192,12 @@ async function toggleHighlight() {
         const data = await response.json();
         if (response.ok) {
             updateHighlightButton(data.highlighted);
+            WildlifeMonitor.showToast(data.highlighted ? 'Added to highlights' : 'Removed from highlights', 'success');
         } else {
-            alert('Failed to toggle highlight: ' + (data.error || 'Unknown error'));
+            WildlifeMonitor.showToast('Failed to toggle highlight: ' + (data.error || 'Unknown error'), 'error');
         }
     } catch (error) {
-        alert('Error toggling highlight: ' + error.message);
+        WildlifeMonitor.showToast('Error toggling highlight: ' + error.message, 'error');
     }
 }
 
@@ -213,13 +213,14 @@ function deleteDetection() {
             
             if (response.ok) {
                 modal.hide();
+                WildlifeMonitor.showToast('Detection deleted', 'success');
                 window.location.href = '/gallery';
             } else {
                 const data = await response.json();
-                alert('Failed to delete: ' + (data.error || 'Unknown error'));
+                WildlifeMonitor.showToast('Failed to delete: ' + (data.error || 'Unknown error'), 'error');
             }
         } catch (error) {
-            alert('Error deleting detection: ' + error.message);
+            WildlifeMonitor.showToast('Error deleting detection: ' + error.message, 'error');
         }
     };
 }

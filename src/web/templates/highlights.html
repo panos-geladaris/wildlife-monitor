@@ -24,9 +24,7 @@
     <p class="text-muted">No highlighted detections yet. Open a detection and click &#9733; Highlight to add it here.</p>
 </div>
 
-<div class="text-center my-4">
-    <button id="loadMoreBtn" class="btn btn-outline-primary d-none">Load More</button>
-</div>
+<div id="scrollSentinel" class="text-center my-4"></div>
 {% endblock %}
 
 {% block scripts %}
@@ -37,7 +35,6 @@ let loading = false;
 let hasMore = true;
 
 const grid = document.getElementById('highlightGrid');
-const loadMoreBtn = document.getElementById('loadMoreBtn');
 const loadingSpinner = document.getElementById('loadingSpinner');
 const noResults = document.getElementById('noResults');
 
@@ -50,10 +47,6 @@ function getTriggerBadgeClass(triggerType) {
     }
 }
 
-function formatTimestamp(timestamp) {
-    return new Date(timestamp).toLocaleString();
-}
-
 function createHighlightCard(detection) {
     const col = document.createElement('div');
     col.className = 'col';
@@ -63,8 +56,9 @@ function createHighlightCard(detection) {
         ? `${(detection.confidence * 100).toFixed(1)}%`
         : '';
 
+    const emoji = detection.animal_class ? WildlifeMonitor.getAnimalIcon(detection.animal_class) + ' ' : '';
     const animalInfo = detection.animal_class
-        ? `<span class="badge bg-warning text-dark">${detection.animal_class} ${confidence}</span>`
+        ? `<span class="badge bg-warning text-dark">${emoji}${detection.animal_class} ${confidence}</span>`
         : '';
 
     col.innerHTML = `
@@ -81,7 +75,7 @@ function createHighlightCard(detection) {
                      alt="Detection ${detection.id}"
                      loading="lazy">
                 <div class="card-body">
-                    <p class="card-text text-muted small mb-2">${formatTimestamp(detection.timestamp)}</p>
+                    <p class="card-text text-muted small mb-2">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
                     <div class="d-flex gap-2 flex-wrap">
                         <span class="badge ${getTriggerBadgeClass(detection.trigger_type)}">${detection.trigger_type}</span>
                         ${animalInfo}
@@ -107,7 +101,6 @@ async function loadHighlights(reset = false) {
 
     loading = true;
     loadingSpinner.classList.remove('d-none');
-    loadMoreBtn.classList.add('d-none');
     noResults.classList.add('d-none');
 
     try {
@@ -121,7 +114,6 @@ async function loadHighlights(reset = false) {
             detections.forEach(d => grid.appendChild(createHighlightCard(d)));
             offset += detections.length;
             hasMore = detections.length === LIMIT;
-            if (hasMore) loadMoreBtn.classList.remove('d-none');
         }
     } catch (error) {
         console.error('Error loading highlights:', error);
@@ -143,6 +135,14 @@ async function removeHighlight(id) {
         console.error('Error removing highlight:', error);
     }
 }
+
+// Infinite scroll
+const observer = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && hasMore && !loading) {
+        loadHighlights(false);
+    }
+}, { rootMargin: '200px' });
+observer.observe(document.getElementById('scrollSentinel'));
 
 function getSelectedIds() {
     return Array.from(document.querySelectorAll('.detection-checkbox:checked'))
@@ -178,17 +178,18 @@ async function bulkDelete() {
         });
 
         if (response.ok) {
+            const data = await response.json();
+            WildlifeMonitor.showToast(`Deleted ${data.records_deleted} detection(s)`, 'success');
             loadHighlights(true);
         } else {
             const data = await response.json();
-            alert('Failed to delete: ' + (data.error || 'Unknown error'));
+            WildlifeMonitor.showToast('Failed to delete: ' + (data.error || 'Unknown error'), 'error');
         }
     } catch (error) {
-        alert('Error deleting detections: ' + error.message);
+        WildlifeMonitor.showToast('Error deleting detections: ' + error.message, 'error');
     }
 }
 
-loadMoreBtn.addEventListener('click', () => loadHighlights(false));
 loadHighlights();
 </script>
 {% endblock %}

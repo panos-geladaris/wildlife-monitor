@@ -11,8 +11,8 @@
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-3">
+<div class="row mb-4 g-3">
+    <div class="col-md-2">
         <label for="triggerFilter" class="form-label">Trigger Type</label>
         <select id="triggerFilter" class="form-select">
             <option value="">All</option>
@@ -21,13 +21,21 @@
             <option value="manual">Manual</option>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <label for="animalFilter" class="form-label">Animal Class</label>
         <select id="animalFilter" class="form-select">
             <option value="">All</option>
         </select>
     </div>
-    <div class="col-md-3 d-flex align-items-end">
+    <div class="col-md-3">
+        <label for="startDate" class="form-label">From</label>
+        <input type="date" id="startDate" class="form-control">
+    </div>
+    <div class="col-md-3">
+        <label for="endDate" class="form-label">To</label>
+        <input type="date" id="endDate" class="form-control">
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
             <label class="form-check-label" for="selectAll">Select All</label>
@@ -48,9 +56,7 @@
     <p class="text-muted">No detections found.</p>
 </div>
 
-<div class="text-center my-4">
-    <button id="loadMoreBtn" class="btn btn-outline-primary d-none">Load More</button>
-</div>
+<div id="scrollSentinel" class="text-center my-4"></div>
 {% endblock %}
 
 {% block scripts %}
@@ -61,11 +67,12 @@ let loading = false;
 let hasMore = true;
 
 const grid = document.getElementById('detectionGrid');
-const loadMoreBtn = document.getElementById('loadMoreBtn');
 const loadingSpinner = document.getElementById('loadingSpinner');
 const noResults = document.getElementById('noResults');
 const triggerFilter = document.getElementById('triggerFilter');
 const animalFilter = document.getElementById('animalFilter');
+const startDate = document.getElementById('startDate');
+const endDate = document.getElementById('endDate');
 
 function getTriggerBadgeClass(triggerType) {
     switch (triggerType) {
@@ -76,10 +83,6 @@ function getTriggerBadgeClass(triggerType) {
     }
 }
 
-function formatTimestamp(timestamp) {
-    return new Date(timestamp).toLocaleString();
-}
-
 function createDetectionCard(detection) {
     const col = document.createElement('div');
     col.className = 'col';
@@ -88,9 +91,10 @@ function createDetectionCard(detection) {
         ? `${(detection.confidence * 100).toFixed(1)}%` 
         : '';
     
+    const emoji = detection.animal_class ? WildlifeMonitor.getAnimalIcon(detection.animal_class) + ' ' : '';
     const speciesInfo = detection.bird_species ? ` (${detection.bird_species})` : '';
     const animalInfo = detection.animal_class 
-        ? `<span class="badge bg-warning text-dark">${detection.animal_class}${speciesInfo} ${confidence}</span>`
+        ? `<span class="badge bg-warning text-dark">${emoji}${detection.animal_class}${speciesInfo} ${confidence}</span>`
         : '';
 
     const starIcon = detection.highlighted
@@ -110,7 +114,7 @@ function createDetectionCard(detection) {
                      alt="Detection ${detection.id}"
                      loading="lazy">
                 <div class="card-body">
-                    <p class="card-text text-muted small mb-2">${formatTimestamp(detection.timestamp)}</p>
+                    <p class="card-text text-muted small mb-2">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
                     <div class="d-flex gap-2 flex-wrap">
                         <span class="badge ${getTriggerBadgeClass(detection.trigger_type)}">${detection.trigger_type}</span>
                         ${animalInfo}
@@ -136,7 +140,6 @@ async function loadDetections(reset = false) {
     
     loading = true;
     loadingSpinner.classList.remove('d-none');
-    loadMoreBtn.classList.add('d-none');
     noResults.classList.add('d-none');
     
     const params = new URLSearchParams({
@@ -149,6 +152,8 @@ async function loadDetections(reset = false) {
     
     if (triggerType) params.append('trigger_type', triggerType);
     if (animalClass) params.append('animal_class', animalClass);
+    if (startDate.value) params.append('start_date', startDate.value);
+    if (endDate.value) params.append('end_date', endDate.value + 'T23:59:59');
     
     try {
         const response = await fetch(`/api/detections?${params}`);
@@ -165,10 +170,6 @@ async function loadDetections(reset = false) {
             
             offset += detections.length;
             hasMore = detections.length === LIMIT;
-            
-            if (hasMore) {
-                loadMoreBtn.classList.remove('d-none');
-            }
         }
     } catch (error) {
         console.error('Error loading detections:', error);
@@ -202,7 +203,16 @@ async function loadAnimalClasses() {
 
 triggerFilter.addEventListener('change', () => loadDetections(true));
 animalFilter.addEventListener('change', () => loadDetections(true));
-loadMoreBtn.addEventListener('click', () => loadDetections(false));
+startDate.addEventListener('change', () => loadDetections(true));
+endDate.addEventListener('change', () => loadDetections(true));
+
+// Infinite scroll
+const observer = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && hasMore && !loading) {
+        loadDetections(false);
+    }
+}, { rootMargin: '200px' });
+observer.observe(document.getElementById('scrollSentinel'));
 
 function getSelectedIds() {
     return Array.from(document.querySelectorAll('.detection-checkbox:checked'))
@@ -249,12 +259,13 @@ async function bulkDelete() {
         
         if (response.ok) {
             document.getElementById('selectAll').checked = false;
+            WildlifeMonitor.showToast(`Deleted ${data.records_deleted} detection(s)`, 'success');
             loadDetections(true);
         } else {
-            alert('Failed to delete: ' + (data.error || 'Unknown error'));
+            WildlifeMonitor.showToast('Failed to delete: ' + (data.error || 'Unknown error'), 'error');
         }
     } catch (error) {
-        alert('Error deleting detections: ' + error.message);
+        WildlifeMonitor.showToast('Error deleting detections: ' + error.message, 'error');
     }
 }
 
