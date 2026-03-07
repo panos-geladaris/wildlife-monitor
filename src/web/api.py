@@ -138,6 +138,7 @@ def list_detections():
                     "trigger_type": d.trigger_type,
                     "animal_class": d.animal_class,
                     "confidence": d.confidence,
+                    "bird_species": d.bird_species,
                     "analyzed": d.analyzed,
                     "highlighted": d.highlighted,
                 }
@@ -175,6 +176,7 @@ def get_detection(detection_id: int):
             "trigger_type": detection.trigger_type,
             "animal_class": detection.animal_class,
             "confidence": detection.confidence,
+            "bird_species": detection.bird_species,
             "analyzed": detection.analyzed,
             "highlighted": detection.highlighted,
             "created_at": detection.created_at.isoformat(),
@@ -226,6 +228,7 @@ def list_highlights():
                     "trigger_type": d.trigger_type,
                     "animal_class": d.animal_class,
                     "confidence": d.confidence,
+                    "bird_species": d.bird_species,
                     "analyzed": d.analyzed,
                     "highlighted": d.highlighted,
                 }
@@ -458,6 +461,7 @@ def get_summary():
                     "trigger_type": d.trigger_type,
                     "animal_class": d.animal_class,
                     "confidence": d.confidence,
+                    "bird_species": d.bird_species,
                 }
                 for d in recent
             ],

@@ -107,8 +107,7 @@ COCO_LABELS: dict[int, str] = {
 }
 
 COCO_ANIMAL_LABELS: set[str] = {
-    "bird", "cat", "dog", "horse", "sheep",
-    "cow", "elephant", "bear", "zebra", "giraffe",
+    "bird", "cat", "dog",
 }
 
 

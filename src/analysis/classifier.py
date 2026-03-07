@@ -10,7 +10,7 @@ from typing import Optional
 
 from PIL import Image
 
-from .model import ModelLoader, IMAGENET_TO_ANIMAL, ANIMAL_CLASSES
+from .model import ModelLoader, IMAGENET_TO_ANIMAL, ANIMAL_CLASSES, IMAGENET_TO_BIRD_SPECIES
 from .frame_extractor import FrameExtractor, ExtractedFrame
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ class ClassificationResult:
     frame_number: Optional[int] = None
     frame_timestamp: Optional[float] = None
     raw_class_idx: Optional[int] = None
+    bird_species: Optional[str] = None
     top_predictions: list[tuple[str, float]] = field(default_factory=list)
     
     @property
@@ -40,6 +41,7 @@ class ClassificationResult:
             "timestamp": self.timestamp.isoformat(),
             "frame_number": self.frame_number,
             "frame_timestamp": self.frame_timestamp,
+            "bird_species": self.bird_species,
             "is_animal": self.is_animal,
             "top_predictions": self.top_predictions,
         }
@@ -123,6 +125,9 @@ class AnimalClassifier:
             top_predictions=top_animal_predictions[:3],
         )
         
+        if best_animal == "bird" and best_class_idx in IMAGENET_TO_BIRD_SPECIES:
+            result.bird_species = IMAGENET_TO_BIRD_SPECIES[best_class_idx]
+
         if frame_info:
             result.frame_number = frame_info.frame_number
             result.frame_timestamp = frame_info.timestamp_seconds

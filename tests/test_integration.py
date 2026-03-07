@@ -337,6 +337,7 @@ class TestAnalysisIntegration:
         mock_result = Mock()
         mock_result.animal_class = "cat"
         mock_result.confidence = 0.9
+        mock_result.bird_species = None
         mock_result.is_animal = True
         mock_classifier.classify_video.return_value = mock_result
         monitor._classifier = mock_classifier

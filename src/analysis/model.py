@@ -238,24 +238,42 @@ IMAGENET_TO_ANIMAL = {
     337: "beaver",    # beaver
     338: "hamster",   # hamster
     
-    # Deer
-    351: "deer",    # hartebeest
-    352: "deer",    # impala
-    353: "deer",    # gazelle
-    
     # Rodents/pests
     333: "mouse",   # hamster predecessor
+}
+
+# Bird species commonly found in UK gardens and woodlands.
+# ImageNet classes outside this set are still detected as "bird"
+# but won't receive a species label.
+IMAGENET_TO_BIRD_SPECIES: dict[int, str] = {
+    8: "hen",
+    10: "brambling",
+    11: "goldfinch",
+    12: "house finch",
+    15: "robin",
+    17: "jay",
+    18: "magpie",
+    19: "chickadee",
+    20: "water ouzel",
+    21: "kite",
+    24: "great grey owl",
+    80: "black grouse",
+    81: "ptarmigan",
+    84: "peacock",
+    85: "quail",
+    86: "partridge",
+    97: "drake",
+    99: "goose",
 }
 
 # Simplified animal classes for output
 ANIMAL_CLASSES = [
     "bird",
-    "cat", 
+    "cat",
     "dog",
     "squirrel",
     "fox",
     "rabbit",
-    "deer",
     "hedgehog",
     "mouse",
     "hamster",
