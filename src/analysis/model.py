@@ -238,11 +238,6 @@ IMAGENET_TO_ANIMAL = {
     337: "beaver",    # beaver
     338: "hamster",   # hamster
     
-    # Deer
-    351: "deer",    # hartebeest
-    352: "deer",    # impala
-    353: "deer",    # gazelle
-    
     # Rodents/pests
     333: "mouse",   # hamster predecessor
 }
@@ -274,12 +269,11 @@ IMAGENET_TO_BIRD_SPECIES: dict[int, str] = {
 # Simplified animal classes for output
 ANIMAL_CLASSES = [
     "bird",
-    "cat", 
+    "cat",
     "dog",
     "squirrel",
     "fox",
     "rabbit",
-    "deer",
     "hedgehog",
     "mouse",
     "hamster",
