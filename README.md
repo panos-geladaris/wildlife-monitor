@@ -622,11 +622,13 @@ The web UI provides a browser-based interface to view detections, timelapses, an
 
 ### Sample Captures
 
-<!-- Add sample videos/GIFs here: save them to docs/samples/ and uncomment the lines below -->
-<!-- | | | |
-|:---:|:---:|:---:|
-| ![Bird](docs/samples/bird.gif) | ![Fox](docs/samples/fox.gif) | ![Squirrel](docs/samples/squirrel.gif) |
-| Bird | Fox | Squirrel | -->
+
+https://github.com/user-attachments/assets/164554e6-34eb-4573-87ba-644f0c385121
+
+
+
+https://github.com/user-attachments/assets/6855f9e8-a70e-46ea-ac71-4f78c2e69973
+
 
 ### Running the Web UI
 
