@@ -130,7 +130,7 @@ async function loadSummary() {
         } else {
             const animalList = animals
                 .sort((a, b) => b[1] - a[1])
-                .map(([animal, count]) => `<li><strong>${animal}:</strong> ${count}</li>`)
+                .map(([animal, count]) => `<li>${WildlifeMonitor.getAnimalIcon(animal)} <strong>${animal}:</strong> ${count}</li>`)
                 .join('');
             animalsCard.innerHTML = `<ul class="list-unstyled mb-0">${animalList}</ul>`;
         }
@@ -141,6 +141,7 @@ async function loadSummary() {
         } else {
             const rows = data.recent_detections.map(d => {
                 const time = new Date(d.timestamp).toLocaleString();
+                const emoji = d.animal_class ? WildlifeMonitor.getAnimalIcon(d.animal_class) + ' ' : '';
                 const animal = d.animal_class || '-';
                 const species = d.bird_species ? ` (${d.bird_species})` : '';
                 const confidence = d.confidence ? `${(d.confidence * 100).toFixed(0)}%` : '-';
@@ -149,7 +150,7 @@ async function loadSummary() {
                         <td><a href="/detection/${d.id}">#${d.id}</a></td>
                         <td>${time}</td>
                         <td>${d.trigger_type}</td>
-                        <td>${animal}${species}</td>
+                        <td>${emoji}${animal}${species}</td>
                         <td>${confidence}</td>
                     </tr>
                 `;
@@ -195,7 +196,7 @@ async function triggerTestCapture() {
 
         window.location.href = `/detection/${data.detection_id}`;
     } catch (error) {
-        alert('Test capture failed: ' + error.message);
+        WildlifeMonitor.showToast('Test capture failed: ' + error.message, 'error');
         btn.disabled = false;
         btn.textContent = originalText;
     }
