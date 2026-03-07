@@ -313,6 +313,12 @@ camera:
 hardware:
   gpio_pin: 17               # PIR sensor GPIO pin
 
+# Audio recording (USB microphone)
+audio:
+  enabled: false
+  device: "plughw:1,0"          # ALSA device (run `arecord -l` to find yours)
+  sample_rate: 44100
+
 # Object detection settings
 detection:
   enabled: true
@@ -354,6 +360,9 @@ timelapse:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `hardware.gpio_pin` | 17 | GPIO pin for PIR sensor |
+| `audio.enabled` | false | Enable audio recording from USB microphone |
+| `audio.device` | `plughw:1,0` | ALSA device identifier |
+| `audio.sample_rate` | 44100 | Audio sample rate (Hz) |
 | `motion.video_duration` | 5.0 | Motion-triggered recording length (seconds) |
 | `motion.cooldown_seconds` | 3.0 | Minimum time between motion triggers |
 | `hourly.video_duration` | 5.0 | Hourly scheduled recording length (seconds) |
@@ -497,15 +506,16 @@ The analysis module uses TorchVision's MobileNetV3 to classify animals in captur
 
 ### Supported Animals
 
-- Birds (various species)
+- Birds (with UK garden/woodland species-level ID)
 - Cats
 - Dogs
 - Squirrels
 - Foxes
 - Rabbits
-- Deer
 - Hedgehogs
 - Mice
+- Beavers
+- Hamsters
 
 ### Usage
 
@@ -560,7 +570,7 @@ The system will still capture videos and serve the web UI - classification can b
 
 In addition to whole-image classification, the system uses SSDLite320 (MobileNetV3-Large backbone) to locate animals in video frames with bounding boxes.
 
-- COCO-pretrained: detects bird, cat, dog, horse, sheep, cow, bear, and more
+- COCO-pretrained: detects bird, cat, and dog
 - For non-COCO animals: crops detected regions and runs the MobileNetV3 classifier for refined identification
 - Annotated key frames are saved as JPEGs in `data/annotated/<detection_id>/`
 - Bounding box data is stored in the `frame_objects` database table
@@ -736,6 +746,8 @@ wildlife-monitor/
 │   │   ├── scheduler.py        # Hourly captures
 │   │   ├── config.py           # Configuration loader
 │   │   ├── daylight.py         # Sunrise/sunset daylight gating
+│   │   ├── audio_recorder.py   # USB microphone recording
+│   │   ├── audio_mux.py        # Audio/video muxing (FFmpeg)
 │   │   └── capture_service.py  # Main orchestrator
 │   ├── storage/
 │   │   ├── database.py         # SQLite operations
@@ -755,6 +767,10 @@ wildlife-monitor/
 │       ├── api.py              # REST API endpoints
 │       ├── templates/          # HTML templates
 │       └── static/             # CSS, JS assets
+├── scripts/
+│   ├── deploy.sh               # Deploy to Raspberry Pi via SSH
+│   ├── test_pir.py             # PIR sensor test script
+│   └── wildlife-monitor.service # systemd service file
 ├── tests/
 │   ├── test_database.py
 │   ├── test_video_store.py
@@ -764,6 +780,7 @@ wildlife-monitor/
 │   ├── test_thumbnail.py       # Thumbnail generation tests
 │   ├── test_test_capture.py    # On-demand capture tests
 │   ├── test_timelapse.py       # Timelapse generation tests
+│   ├── test_cleanup.py         # Automatic cleanup tests
 │   ├── test_web.py
 │   └── test_integration.py
 ├── data/
@@ -782,7 +799,6 @@ wildlife-monitor/
 
 ### New Sensors & Hardware
 
-- **Microphone / USB audio** — Record ambient sound alongside video; use an audio classification model (e.g., BirdNET) to identify species by call, especially at night or when animals are out of frame
 - **BME280 / BME680 environmental sensor** — Log temperature, humidity, barometric pressure, and air quality per detection; correlate weather conditions with animal activity patterns
 - **IR camera module / NoIR + IR LEDs** — Enable night vision captures with a dual-camera setup or a single NoIR camera with an IR illuminator ring
 - **Ultrasonic range sensor (HC-SR04)** — Estimate animal distance and size; filter out detections that are too far away or too close
@@ -800,6 +816,11 @@ wildlife-monitor/
 - **Export & sharing** — Export detection data as CSV; generate shareable daily/weekly summary reports
 - **Custom model fine-tuning** — Collect labeled detections and fine-tune a classifier for the animals in your area
 - **Seasonal analytics** — Long-term trends showing which species appear in which months
+- **Cloud backup** — Sync videos and detections to cloud storage
+- **Weather correlation analysis** — Correlate detection patterns with weather data
+- **Annotated MP4 generation** — Burn bounding boxes into the video file for easy sharing
+- **Canvas-based bounding box overlay** — Sync bounding box display to `video.currentTime` in the web UI
+- **Custom lightweight detector** — Train a detector for non-COCO animals (fox, rabbit, squirrel)
 
 ## License
 
