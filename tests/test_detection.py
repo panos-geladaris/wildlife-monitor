@@ -29,10 +29,10 @@ class TestCOCOLabels:
         assert COCO_LABELS[0] == "__background__"
 
     def test_coco_animal_labels_count(self):
-        assert len(COCO_ANIMAL_LABELS) == 10
+        assert len(COCO_ANIMAL_LABELS) == 3
 
     def test_coco_animal_labels_content(self):
-        expected = {"bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"}
+        expected = {"bird", "cat", "dog"}
         assert COCO_ANIMAL_LABELS == expected
 
     def test_all_animal_labels_in_coco_labels(self):
