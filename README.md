@@ -615,6 +615,19 @@ Any detection can be marked as a highlight from its detail page using the ★ bu
 
 The web UI provides a browser-based interface to view detections, timelapses, and statistics.
 
+<!-- Add your screenshot here: save it to docs/screenshots/ and uncomment the line below -->
+![Dashboard](docs/screenshots/dashboard.png)
+
+![Highlights](docs/screenshots/highlights.png)
+
+### Sample Captures
+
+<!-- Add sample videos/GIFs here: save them to docs/samples/ and uncomment the lines below -->
+<!-- | | | |
+|:---:|:---:|:---:|
+| ![Bird](docs/samples/bird.gif) | ![Fox](docs/samples/fox.gif) | ![Squirrel](docs/samples/squirrel.gif) |
+| Bird | Fox | Squirrel | -->
+
 ### Running the Web UI
 
 ```bash
