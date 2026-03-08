@@ -60,7 +60,10 @@
                         </tbody>
                     </table>
                     <hr>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button id="reclassifyBtn" class="btn btn-outline-primary btn-sm" onclick="reclassifyDetection()">
+                            &#x1f504; Re-classify
+                        </button>
                         <button id="highlightBtn" class="btn btn-outline-warning btn-sm" onclick="toggleHighlight()">
                             &#9733; Highlight
                         </button>
@@ -198,6 +201,31 @@ async function toggleHighlight() {
         }
     } catch (error) {
         WildlifeMonitor.showToast('Error toggling highlight: ' + error.message, 'error');
+    }
+}
+
+async function reclassifyDetection() {
+    const btn = document.getElementById('reclassifyBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analyzing…';
+
+    try {
+        const response = await fetch(`/api/detections/${detectionId}/reclassify`, {
+            method: 'POST',
+        });
+        const data = await response.json();
+        if (response.ok) {
+            WildlifeMonitor.showToast('Re-classification complete: ' + (data.animal_class || 'unknown'), 'success');
+            loadDetection();
+        } else {
+            WildlifeMonitor.showToast('Re-classification failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        WildlifeMonitor.showToast('Error: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
     }
 }
 
