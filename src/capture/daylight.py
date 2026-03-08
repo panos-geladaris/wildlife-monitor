@@ -36,7 +36,11 @@ class SunriseSunsetClient:
         url = f"{self.BASE_URL}?{params}"
 
         try:
-            with urllib.request.urlopen(url, timeout=10) as resp:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "wildlife-monitor/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode())
         except (urllib.error.URLError, OSError, ValueError) as exc:
             logger.error("Sunrise-sunset API request failed: %s", exc)

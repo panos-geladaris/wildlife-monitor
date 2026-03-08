@@ -13,6 +13,7 @@ This system uses a PIR motion sensor and camera module connected to a Raspberry 
 - Generate video thumbnails for the gallery view
 - Automatically clean up empty detections (no animal recognised) after a configurable age
 - Generate daily time-lapse videos from the day's detections
+- Re-classify videos on demand from the web UI
 - Provide a web UI to browse detections, timelapses, view statistics, and trigger test captures
 
 ## Architecture
@@ -611,6 +612,12 @@ When an empty detection is removed, its video file, thumbnail, annotated frames 
 
 Any detection can be marked as a highlight from its detail page using the ★ button, regardless of trigger type or whether an animal was recognised. Highlighted detections are shown with a star icon in the gallery and collected in a dedicated Highlights page (`/highlights`) for easy access. Highlights can also be deleted directly from that page.
 
+## Re-classification
+
+Any detection can be re-classified from its detail page using the 🔄 Re-classify button. This re-runs the full analysis pipeline (MobileNetV3 classification + SSDLite320 object detection) on the existing video, replacing the previous results. It is useful when a video was originally classified as "unknown" or when the model has been updated.
+
+The re-classification clears old bounding box data and annotated frames before storing the new results. If the classifier returns "unknown" but the object detector finds an animal, the detector's best result is used.
+
 ## Web UI
 
 The web UI provides a browser-based interface to view detections, timelapses, and statistics.
@@ -661,7 +668,7 @@ python -m src.web.app
 |------|-----|-------------|
 | Dashboard | `/` | System status, today's summary, recent detections, test capture button |
 | Gallery | `/gallery` | Browse all detections with filters and thumbnails |
-| Detection | `/detection/:id` | View video, classification results, and annotated key frames |
+| Detection | `/detection/:id` | View video, classification results, annotated key frames, and re-classify |
 | Highlights | `/highlights` | Browse and manage highlighted detections |
 | Timelapses | `/timelapses` | Browse daily time-lapse videos with animal summaries |
 | Timelapse | `/timelapse/:id` | View timelapse video and animal breakdown |
@@ -679,6 +686,7 @@ GET    /api/detections/:id/objects    - Bounding box data for a detection
 DELETE /api/detections/:id            - Delete a detection and its video
 POST   /api/detections/bulk-delete    - Bulk delete detections (body: {"ids": [1,2,3]})
 POST   /api/detections/:id/highlight   - Toggle highlight on a detection
+POST   /api/detections/:id/reclassify - Re-run classification and object detection
 POST   /api/test-capture              - Trigger on-demand test capture with analysis
 GET    /api/highlights                 - List highlighted detections
 GET    /api/videos                    - List video files
@@ -708,6 +716,9 @@ curl "http://localhost:5001/api/stats/daily?days=7"
 
 # Trigger a test capture (requires full system mode, not --web-only)
 curl -X POST http://localhost:5001/api/test-capture
+
+# Re-classify a detection
+curl -X POST http://localhost:5001/api/detections/42/reclassify
 
 # Delete a detection
 curl -X DELETE http://localhost:5001/api/detections/42
@@ -836,6 +847,10 @@ wildlife-monitor/
 - **Annotated MP4 generation** — Burn bounding boxes into the video file for easy sharing
 - **Canvas-based bounding box overlay** — Sync bounding box display to `video.currentTime` in the web UI
 - **Custom lightweight detector** — Train a detector for non-COCO animals (fox, rabbit, squirrel)
+
+## Acknowledgements
+
+Daylight-only capture uses the free [Sunrise-Sunset API](https://sunrise-sunset.org/) for sunrise and sunset times.
 
 ## License
 

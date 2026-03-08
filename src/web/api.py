@@ -553,6 +553,110 @@ def bulk_delete_detections():
         return jsonify({"error": str(e)}), 500
 
 
+@api_bp.route("/detections/<int:detection_id>/reclassify", methods=["POST"])
+def reclassify_detection(detection_id: int):
+    """
+    Re-run classification and object detection on an existing video.
+
+    Returns:
+        Updated detection record with new analysis results.
+    """
+    try:
+        db = get_database()
+        detection = db.get_detection(detection_id)
+
+        if detection is None:
+            return jsonify({"error": "Detection not found"}), 404
+
+        video_path = Path(detection.video_path)
+        if not video_path.exists():
+            return jsonify({"error": "Video file not found"}), 404
+
+        # Run classification
+        from src.analysis import AnimalClassifier
+        classifier = AnimalClassifier(
+            model_name="mobilenet_v3_small",
+            confidence_threshold=0.3,
+        )
+        classifier.load_model()
+        result = classifier.classify_video(video_path)
+        classifier.unload_model()
+
+        db.update_detection(
+            detection_id,
+            animal_class=result.animal_class,
+            confidence=result.confidence,
+            bird_species=result.bird_species,
+            analyzed=True,
+        )
+
+        # Re-run object detection
+        try:
+            from src.analysis import ObjectDetector
+            detector = ObjectDetector(classify_crops=True)
+            detector.load_model()
+            frames_with_boxes = detector.detect_video_with_images(video_path)
+
+            # Clear old frame objects and annotated frames
+            db.delete_frame_objects(detection_id)
+            video_dir = Path(current_app.config.get("VIDEO_DIR")).resolve()
+            annotated_dir = video_dir.parent / "annotated" / str(detection_id)
+            if annotated_dir.exists():
+                import shutil
+                shutil.rmtree(annotated_dir)
+
+            all_boxes = []
+            for _, boxes in frames_with_boxes:
+                all_boxes.extend(boxes)
+
+            if all_boxes:
+                db.add_frame_objects(
+                    detection_id,
+                    [b.to_dict() for b in all_boxes],
+                )
+                from src.analysis.annotator import save_annotated_frames
+                save_annotated_frames(
+                    detection_id, frames_with_boxes, video_dir.parent / "annotated"
+                )
+
+                # If classifier found nothing, use best detector result
+                current = db.get_detection(detection_id)
+                if current and (not current.animal_class or current.animal_class == "unknown"):
+                    best_box = max(
+                        (b for b in all_boxes if b.animal_class),
+                        key=lambda b: b.animal_confidence or 0,
+                        default=None,
+                    )
+                    if best_box and best_box.animal_class:
+                        db.update_detection(
+                            detection_id,
+                            animal_class=best_box.animal_class,
+                            confidence=best_box.animal_confidence,
+                            bird_species=best_box.bird_species,
+                        )
+
+            detector.unload_model()
+        except ImportError:
+            logger.warning("Object detection dependencies not available")
+        except Exception as e:
+            logger.warning(f"Object detection failed during reclassify: {e}")
+
+        updated = db.get_detection(detection_id)
+        return jsonify({
+            "id": updated.id,
+            "animal_class": updated.animal_class,
+            "confidence": updated.confidence,
+            "bird_species": updated.bird_species,
+            "analyzed": updated.analyzed,
+            "message": "Re-classification complete",
+        })
+    except ImportError:
+        return jsonify({"error": "ML dependencies not available"}), 503
+    except Exception as e:
+        logger.error(f"Error reclassifying detection {detection_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @api_bp.route("/test-capture", methods=["POST"])
 def test_capture():
     """
