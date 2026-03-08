@@ -42,7 +42,8 @@ class TestSunriseSunsetClient:
         assert result.sunset == SUNSET
         assert result.date == date(2025, 6, 15)
         mock_open.assert_called_once()
-        url = mock_open.call_args[0][0]
+        req = mock_open.call_args[0][0]
+        url = req.full_url
         assert "formatted=0" in url
         assert "tzid=Europe/London" in url
 
