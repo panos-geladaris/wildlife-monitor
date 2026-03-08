@@ -84,3 +84,8 @@ All `data/` contents are gitignored except `.gitkeep` files.
 - **Web UI port**: Default is 5001.
 - **Database migrations**: There is no migration system — schema changes go directly in `Database._init_db()` using `CREATE TABLE IF NOT EXISTS`.
 - **Background processing**: Video analysis runs in daemon threads spawned from `_on_video_captured()`. Scheduled jobs (cleanup, timelapse) use APScheduler `BackgroundScheduler`.
+
+## Development practices
+
+- Always use Red/Green Test-driven development for the implementation
+- Before starting with the implementation, provide the plan for review and ask the user if they want to proceed
