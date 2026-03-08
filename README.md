@@ -848,6 +848,10 @@ wildlife-monitor/
 - **Canvas-based bounding box overlay** — Sync bounding box display to `video.currentTime` in the web UI
 - **Custom lightweight detector** — Train a detector for non-COCO animals (fox, rabbit, squirrel)
 
+## Acknowledgements
+
+Daylight-only capture uses the free [Sunrise-Sunset API](https://sunrise-sunset.org/) for sunrise and sunset times.
+
 ## License
 
 MIT
