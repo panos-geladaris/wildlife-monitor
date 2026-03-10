@@ -141,6 +141,9 @@ def list_detections():
                     "bird_species": d.bird_species,
                     "analyzed": d.analyzed,
                     "highlighted": d.highlighted,
+                    "sound_class": d.sound_class,
+                    "sound_species": d.sound_species,
+                    "sound_confidence": d.sound_confidence,
                 }
                 for d in detections
             ],
@@ -179,6 +182,9 @@ def get_detection(detection_id: int):
             "bird_species": detection.bird_species,
             "analyzed": detection.analyzed,
             "highlighted": detection.highlighted,
+            "sound_class": detection.sound_class,
+            "sound_species": detection.sound_species,
+            "sound_confidence": detection.sound_confidence,
             "created_at": detection.created_at.isoformat(),
         })
     except Exception as e:
@@ -231,6 +237,9 @@ def list_highlights():
                     "bird_species": d.bird_species,
                     "analyzed": d.analyzed,
                     "highlighted": d.highlighted,
+                    "sound_class": d.sound_class,
+                    "sound_species": d.sound_species,
+                    "sound_confidence": d.sound_confidence,
                 }
                 for d in detections
             ],
@@ -462,6 +471,9 @@ def get_summary():
                     "animal_class": d.animal_class,
                     "confidence": d.confidence,
                     "bird_species": d.bird_species,
+                    "sound_class": d.sound_class,
+                    "sound_species": d.sound_species,
+                    "sound_confidence": d.sound_confidence,
                 }
                 for d in recent
             ],

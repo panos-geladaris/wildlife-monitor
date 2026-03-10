@@ -28,6 +28,9 @@ class Detection:
     bird_species: Optional[str] = None
     analyzed: bool = False
     highlighted: bool = False
+    sound_class: Optional[str] = None
+    sound_species: Optional[str] = None
+    sound_confidence: Optional[float] = None
     created_at: datetime = field(default_factory=datetime.now)
 
 
@@ -148,6 +151,20 @@ class Database:
             if "bird_species" not in columns:
                 conn.execute(
                     "ALTER TABLE detections ADD COLUMN bird_species TEXT"
+                )
+
+            # Add sound classification columns if they don't exist yet
+            if "sound_class" not in columns:
+                conn.execute(
+                    "ALTER TABLE detections ADD COLUMN sound_class TEXT"
+                )
+            if "sound_species" not in columns:
+                conn.execute(
+                    "ALTER TABLE detections ADD COLUMN sound_species TEXT"
+                )
+            if "sound_confidence" not in columns:
+                conn.execute(
+                    "ALTER TABLE detections ADD COLUMN sound_confidence REAL"
                 )
 
             # Add bird_species column to frame_objects if it doesn't exist yet
@@ -281,6 +298,9 @@ class Database:
         confidence: Optional[float] = None,
         analyzed: Optional[bool] = None,
         bird_species: Optional[str] = None,
+        sound_class: Optional[str] = None,
+        sound_species: Optional[str] = None,
+        sound_confidence: Optional[float] = None,
     ) -> bool:
         """
         Update a detection record.
@@ -306,6 +326,18 @@ class Database:
         if bird_species is not None:
             updates.append("bird_species = ?")
             params.append(bird_species)
+        
+        if sound_class is not None:
+            updates.append("sound_class = ?")
+            params.append(sound_class)
+        
+        if sound_species is not None:
+            updates.append("sound_species = ?")
+            params.append(sound_species)
+        
+        if sound_confidence is not None:
+            updates.append("sound_confidence = ?")
+            params.append(sound_confidence)
         
         if not updates:
             return False
@@ -533,6 +565,7 @@ class Database:
 
     def _row_to_detection(self, row: sqlite3.Row) -> Detection:
         """Convert a database row to Detection object."""
+        keys = row.keys()
         return Detection(
             id=row["id"],
             timestamp=datetime.fromisoformat(row["timestamp"]),
@@ -540,9 +573,12 @@ class Database:
             trigger_type=row["trigger_type"],
             animal_class=row["animal_class"],
             confidence=row["confidence"],
-            bird_species=row["bird_species"] if "bird_species" in row.keys() else None,
+            bird_species=row["bird_species"] if "bird_species" in keys else None,
             analyzed=bool(row["analyzed"]),
             highlighted=bool(row["highlighted"]) if row["highlighted"] is not None else False,
+            sound_class=row["sound_class"] if "sound_class" in keys else None,
+            sound_species=row["sound_species"] if "sound_species" in keys else None,
+            sound_confidence=row["sound_confidence"] if "sound_confidence" in keys else None,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(),
         )
     

@@ -18,3 +18,7 @@ opencv-python-headless>=4.8.0  # Headless version for Pi
 
 # Numpy - use system version on Pi to avoid picamera2 conflicts
 # pip install numpy==$(python3 -c "import numpy; print(numpy.__version__)")
+
+# Audio classification (optional - system degrades gracefully without them)
+# panns-inference    # General animal sound detection (PyTorch-based)
+# birdnet            # Bird species identification (TFLite-based)

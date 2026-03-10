@@ -408,3 +408,71 @@ class TestHighlightsApi:
 
         for d in data["detections"]:
             assert "highlighted" in d
+
+
+class TestSoundClassificationApi:
+    """Tests for sound classification fields in API responses."""
+
+    def test_detection_includes_sound_fields(self, client, db):
+        """Detection detail should include sound classification fields."""
+        det_id = db.add_detection(Detection(
+            timestamp=datetime.now(),
+            video_path="/data/videos/test.mp4",
+            trigger_type="motion",
+        ))
+        db.update_detection(
+            det_id,
+            sound_class="bird",
+            sound_species="Turdus merula_Eurasian Blackbird",
+            sound_confidence=0.91,
+        )
+
+        response = client.get(f"/api/detections/{det_id}")
+        data = response.get_json()
+
+        assert data["sound_class"] == "bird"
+        assert data["sound_species"] == "Turdus merula_Eurasian Blackbird"
+        assert data["sound_confidence"] == 0.91
+
+    def test_detection_sound_fields_null_by_default(self, client, sample_detections):
+        """Sound fields should be null when no audio analysis was done."""
+        det_id = sample_detections[0].id
+        response = client.get(f"/api/detections/{det_id}")
+        data = response.get_json()
+
+        assert data["sound_class"] is None
+        assert data["sound_species"] is None
+        assert data["sound_confidence"] is None
+
+    def test_detections_list_includes_sound_fields(self, client, sample_detections):
+        """Detection list should include sound classification fields."""
+        response = client.get("/api/detections")
+        data = response.get_json()
+
+        for d in data["detections"]:
+            assert "sound_class" in d
+            assert "sound_species" in d
+            assert "sound_confidence" in d
+
+    def test_highlights_include_sound_fields(self, client, sample_detections):
+        """Highlighted detections should include sound fields."""
+        det_id = sample_detections[0].id
+        client.post(f"/api/detections/{det_id}/highlight")
+
+        response = client.get("/api/highlights")
+        data = response.get_json()
+
+        for d in data["detections"]:
+            assert "sound_class" in d
+            assert "sound_species" in d
+            assert "sound_confidence" in d
+
+    def test_summary_recent_includes_sound_fields(self, client, sample_detections):
+        """Summary recent detections should include sound fields."""
+        response = client.get("/api/stats/summary")
+        data = response.get_json()
+
+        for d in data["recent_detections"]:
+            assert "sound_class" in d
+            assert "sound_species" in d
+            assert "sound_confidence" in d

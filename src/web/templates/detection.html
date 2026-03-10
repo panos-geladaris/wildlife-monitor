@@ -57,6 +57,10 @@
                                 <th scope="row" class="text-muted">Animal Detected</th>
                                 <td id="detectionAnimal"></td>
                             </tr>
+                            <tr id="soundRow" class="d-none">
+                                <th scope="row" class="text-muted">Sound Detected</th>
+                                <td id="detectionSound"></td>
+                            </tr>
                         </tbody>
                     </table>
                     <hr>
@@ -160,6 +164,16 @@ async function loadDetection() {
             const species = detection.bird_species ? ` (${detection.bird_species})` : '';
             document.getElementById('detectionAnimal').textContent = emoji + ' ' + detection.animal_class + species + confidence;
             document.getElementById('animalRow').classList.remove('d-none');
+        }
+
+        if (detection.sound_class) {
+            const soundConf = detection.sound_confidence
+                ? ` (${(detection.sound_confidence * 100).toFixed(1)}%)`
+                : '';
+            const soundSpecies = detection.sound_species ? ` — ${detection.sound_species}` : '';
+            document.getElementById('detectionSound').textContent =
+                '🔊 ' + detection.sound_class + soundSpecies + soundConf;
+            document.getElementById('soundRow').classList.remove('d-none');
         }
         
         updateHighlightButton(detection.highlighted);
