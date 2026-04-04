@@ -22,6 +22,7 @@ def cleanup_detection(db: Database, detection: Detection, video_dir: Path) -> No
 
     Removes:
     - The video file
+    - The companion WAV file (if present — orphaned by a crash mid-capture)
     - The thumbnail image
     - The annotated frames directory
     - The database record (cascades to frame_objects)
@@ -29,6 +30,10 @@ def cleanup_detection(db: Database, detection: Detection, video_dir: Path) -> No
     video_path = Path(detection.video_path)
     if video_path.exists():
         video_path.unlink()
+
+    wav_path = video_path.with_suffix(".wav")
+    if wav_path.exists():
+        wav_path.unlink()
 
     thumb_path = video_dir / "thumbnails" / (video_path.stem + ".jpg")
     if thumb_path.exists():

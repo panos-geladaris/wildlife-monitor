@@ -25,13 +25,16 @@ def temp_env():
 _detection_counter = 0
 
 
-def _add_detection(db, video_dir, age_hours=48, animal_class=None, analyzed=True):
+def _add_detection(db, video_dir, age_hours=48, animal_class=None, analyzed=True, with_wav=False):
     """Helper to create a detection with optional video, thumbnail, and annotated dir."""
     global _detection_counter
     _detection_counter += 1
     ts = datetime.now() - timedelta(hours=age_hours, seconds=_detection_counter)
     video_path = video_dir / f"motion_{ts.strftime('%Y%m%d_%H%M%S')}_{_detection_counter}.mp4"
     video_path.touch()
+
+    if with_wav:
+        video_path.with_suffix(".wav").touch()
 
     detection = Detection(
         timestamp=ts,
@@ -130,6 +133,29 @@ class TestCleanupDetection:
         assert not video_path.exists()
         assert not (video_dir / "thumbnails" / (video_path.stem + ".jpg")).exists()
         assert not (tmpdir / "annotated" / str(det_id)).exists()
+        assert db.get_detection(det_id) is None
+
+    def test_deletes_companion_wav(self, temp_env):
+        db, video_dir, _ = temp_env
+        det_id, video_path = _add_detection(db, video_dir, age_hours=48, analyzed=True, with_wav=True)
+        wav_path = video_path.with_suffix(".wav")
+        assert wav_path.exists()
+
+        detection = db.get_detection(det_id)
+        cleanup_detection(db, detection, video_dir)
+
+        assert not wav_path.exists()
+        assert db.get_detection(det_id) is None
+
+    def test_handles_missing_wav(self, temp_env):
+        """Should not raise when no WAV file exists alongside the video."""
+        db, video_dir, _ = temp_env
+        det_id, video_path = _add_detection(db, video_dir, age_hours=48, analyzed=True)
+        assert not video_path.with_suffix(".wav").exists()
+
+        detection = db.get_detection(det_id)
+        cleanup_detection(db, detection, video_dir)
+
         assert db.get_detection(det_id) is None
 
     def test_handles_missing_video(self, temp_env):
