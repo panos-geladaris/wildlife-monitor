@@ -74,6 +74,13 @@ class TestTriggerManualCaptureDuration:
 class TestTestCaptureEndpoint:
     """Step 3: POST /api/test-capture endpoint tests."""
 
+    @pytest.fixture(autouse=True)
+    def reset_rate_limit(self):
+        import src.web.api as api_module
+        api_module._last_test_capture = 0.0
+        yield
+        api_module._last_test_capture = 0.0
+
     @pytest.fixture()
     def app_with_monitor(self, tmp_path):
         db_path = tmp_path / "test.db"
