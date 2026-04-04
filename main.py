@@ -378,7 +378,10 @@ class WildlifeMonitor:
         # Mux audio into video if an animal was detected, otherwise discard it
         if metadata.audio_path and metadata.audio_path.exists():
             det = self._database.get_detection(detection_id)
-            animal_found = det and det.animal_class and det.animal_class != "unknown"
+            animal_found = det and (
+                (det.animal_class and det.animal_class != "unknown")
+                or det.sound_class is not None
+            )
             if animal_found:
                 from src.capture.audio_mux import mux_audio
                 mux_audio(metadata.filepath, metadata.audio_path)

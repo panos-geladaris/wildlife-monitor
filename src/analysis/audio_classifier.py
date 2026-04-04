@@ -218,21 +218,28 @@ class AudioClassifier:
         all_preds: list[tuple[str, float]] = []
         best_class: Optional[str] = None
         best_confidence: float = 0.0
+        fallback_class: Optional[str] = None
+        fallback_confidence: float = 0.0
 
         for label, confidence in panns_result.items():
             if label in AUDIOSET_ANIMAL_LABELS:
                 category = AUDIOSET_ANIMAL_LABELS[label]
-                # Skip the generic "animal" label if we have something specific
-                if category == "animal":
-                    all_preds.append((label, confidence))
-                    continue
                 all_preds.append((label, confidence))
+                if category == "animal":
+                    # Keep as fallback in case no specific category is found
+                    if confidence > fallback_confidence and confidence >= self.min_confidence:
+                        fallback_class = category
+                        fallback_confidence = confidence
+                    continue
                 if confidence > best_confidence and confidence >= self.min_confidence:
                     best_class = category
                     best_confidence = confidence
 
         all_preds.sort(key=lambda x: x[1], reverse=True)
 
+        # Use the generic "animal" label only if no specific category was detected
+        if best_class is None and fallback_class is not None:
+            return fallback_class, fallback_confidence, all_preds
         if best_class is None:
             return None, None, all_preds
         return best_class, best_confidence, all_preds
