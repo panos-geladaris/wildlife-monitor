@@ -476,3 +476,126 @@ class TestSoundClassificationApi:
             assert "sound_class" in d
             assert "sound_species" in d
             assert "sound_confidence" in d
+
+
+class TestReclassifyApi:
+    """Tests for POST /api/detections/<id>/reclassify."""
+
+    @pytest.fixture(autouse=True)
+    def mock_analysis_module(self):
+        """
+        Inject mock ML classes directly into src.analysis.__dict__ to avoid
+        triggering the lazy __getattr__ imports that need torch/cv2.
+        """
+        import src.analysis as mod
+
+        # Build a mock AnimalClassifier whose instance returns a bird result
+        mock_result = MagicMock()
+        mock_result.animal_class = "bird"
+        mock_result.confidence = 0.85
+        mock_result.bird_species = None
+
+        mock_instance = MagicMock()
+        mock_instance.classify_video.return_value = mock_result
+
+        mock_cls = MagicMock(return_value=mock_instance)
+        self._mock_classifier_cls = mock_cls
+        self._mock_classifier_instance = mock_instance
+
+        # ObjectDetector raises ImportError so the reclassify code skips it cleanly
+        def _raise_import(*a, **kw):
+            raise ImportError("mocked")
+
+        mock_detector_cls = MagicMock(side_effect=_raise_import)
+
+        mod.__dict__["AnimalClassifier"] = mock_cls
+        mod.__dict__["ObjectDetector"] = mock_detector_cls
+
+        yield
+
+        mod.__dict__.pop("AnimalClassifier", None)
+        mod.__dict__.pop("ObjectDetector", None)
+
+    @pytest.fixture
+    def detection_with_video(self, app, db):
+        """Create a detection whose video file actually exists on disk."""
+        video_dir = app.config["VIDEO_DIR"]
+        video_path = video_dir / "motion_20260404_120000.mp4"
+        video_path.write_bytes(b"fake video data")
+
+        det_id = db.add_detection(Detection(
+            timestamp=datetime.now(),
+            video_path=str(video_path),
+            trigger_type="motion",
+            analyzed=False,
+        ))
+        return det_id, video_path
+
+    def test_reclassify_not_found(self, client):
+        response = client.post("/api/detections/9999/reclassify")
+        assert response.status_code == 404
+
+    def test_reclassify_runs_audio_when_wav_present(self, client, app, db, detection_with_video):
+        """When a WAV file exists alongside the video, audio classification runs."""
+        det_id, video_path = detection_with_video
+        wav_path = video_path.with_suffix(".wav")
+        wav_path.write_bytes(b"fake wav data")
+
+        mock_audio_result = MagicMock()
+        mock_audio_result.has_sound = True
+        mock_audio_result.sound_class = "bird"
+        mock_audio_result.sound_species = "Turdus merula_Eurasian Blackbird"
+        mock_audio_result.sound_confidence = 0.91
+
+        with patch("src.analysis.audio_classifier.AudioClassifier.classify_audio",
+                   return_value=mock_audio_result):
+            response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["sound_class"] == "bird"
+        assert data["sound_species"] == "Turdus merula_Eurasian Blackbird"
+        assert data["sound_confidence"] == 0.91
+
+    def test_reclassify_skips_audio_when_no_wav(self, client, app, db, detection_with_video):
+        """When no WAV file exists, audio classification is skipped gracefully."""
+        det_id, video_path = detection_with_video
+        assert not video_path.with_suffix(".wav").exists()
+
+        response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["sound_class"] is None
+        assert data["sound_species"] is None
+        assert data["sound_confidence"] is None
+
+    def test_reclassify_audio_no_sound_detected(self, client, app, db, detection_with_video):
+        """When audio classification finds nothing, sound fields remain null."""
+        det_id, video_path = detection_with_video
+        wav_path = video_path.with_suffix(".wav")
+        wav_path.write_bytes(b"fake wav data")
+
+        mock_audio_result = MagicMock()
+        mock_audio_result.has_sound = False
+
+        with patch("src.analysis.audio_classifier.AudioClassifier.classify_audio",
+                   return_value=mock_audio_result):
+            response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["sound_class"] is None
+
+    def test_reclassify_response_includes_sound_fields(self, client, app, db, detection_with_video):
+        """Response always includes sound fields regardless of outcome."""
+        det_id, _ = detection_with_video
+
+        response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert "sound_class" in data
+        assert "sound_species" in data
+        assert "sound_confidence" in data
+        assert data["message"] == "Re-classification complete"

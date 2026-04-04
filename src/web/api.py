@@ -653,12 +653,51 @@ def reclassify_detection(detection_id: int):
         except Exception as e:
             logger.warning(f"Object detection failed during reclassify: {e}")
 
+        # Re-run audio classification if the original WAV is still on disk
+        wav_path = video_path.with_suffix(".wav")
+        if wav_path.exists():
+            try:
+                from src.analysis.audio_classifier import AudioClassifier
+
+                monitor = current_app.config.get("MONITOR")
+                audio_classifier = getattr(monitor, "_audio_classifier", None) if monitor else None
+
+                if audio_classifier is None:
+                    audio_classifier = AudioClassifier()
+
+                current = db.get_detection(detection_id)
+                visual_class = current.animal_class if current else None
+                audio_result = audio_classifier.classify_audio(wav_path, visual_animal_class=visual_class)
+
+                if audio_result.has_sound:
+                    db.update_detection(
+                        detection_id,
+                        sound_class=audio_result.sound_class,
+                        sound_species=audio_result.sound_species,
+                        sound_confidence=audio_result.sound_confidence,
+                    )
+                    logger.info(
+                        f"Reclassify audio: {audio_result.sound_class} "
+                        f"({audio_result.sound_confidence:.1%})"
+                    )
+                else:
+                    logger.info("Reclassify audio: no animal sound detected")
+            except ImportError:
+                logger.warning("Audio classification dependencies not available, skipping")
+            except Exception as e:
+                logger.warning(f"Audio classification failed during reclassify: {e}")
+        else:
+            logger.debug(f"No WAV file found alongside video, skipping audio reclassification")
+
         updated = db.get_detection(detection_id)
         return jsonify({
             "id": updated.id,
             "animal_class": updated.animal_class,
             "confidence": updated.confidence,
             "bird_species": updated.bird_species,
+            "sound_class": updated.sound_class,
+            "sound_species": updated.sound_species,
+            "sound_confidence": updated.sound_confidence,
             "analyzed": updated.analyzed,
             "message": "Re-classification complete",
         })
