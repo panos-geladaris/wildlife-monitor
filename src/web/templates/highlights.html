@@ -70,16 +70,19 @@ function createHighlightCard(detection) {
             <span class="position-absolute top-0 end-0 m-2 text-warning" style="z-index: 1; font-size: 1.25rem; cursor: pointer;"
                   title="Remove highlight" onclick="event.preventDefault(); removeHighlight(${detection.id})">&#9733;</span>
             <a href="/detection/${detection.id}" class="text-decoration-none">
-                <img class="card-img-top" style="height: 180px; object-fit: cover;"
-                     src="/thumbnails/${detection.video_filename.replace(/\.[^.]+$/, '.jpg')}"
-                     alt="Detection ${detection.id}"
-                     loading="lazy">
-                <div class="card-body">
-                    <p class="card-text text-muted small mb-2">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <span class="badge ${getTriggerBadgeClass(detection.trigger_type)}">${detection.trigger_type}</span>
+                <div class="position-relative">
+                    <img class="card-img-top" style="height: 180px; object-fit: cover;"
+                         src="/thumbnails/${detection.video_filename.replace(/\.[^.]+$/, '.jpg')}"
+                         alt="Detection ${detection.id}"
+                         loading="lazy">
+                    <div class="position-absolute bottom-0 start-0 end-0 px-2 pb-2 d-flex gap-1 flex-wrap"
+                         style="background: linear-gradient(transparent, rgba(0,0,0,0.55));">
                         ${animalInfo}
                     </div>
+                </div>
+                <div class="card-body py-2">
+                    <p class="card-text text-muted small mb-1">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
+                    <span class="badge ${getTriggerBadgeClass(detection.trigger_type)}">${detection.trigger_type}</span>
                 </div>
             </a>
         </div>
@@ -117,6 +120,7 @@ async function loadHighlights(reset = false) {
         }
     } catch (error) {
         console.error('Error loading highlights:', error);
+        WildlifeMonitor.showToast('Failed to load highlights: ' + error.message, 'error');
     } finally {
         loading = false;
         loadingSpinner.classList.add('d-none');
