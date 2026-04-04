@@ -28,6 +28,10 @@ def cleanup_detection(db: Database, detection: Detection, video_dir: Path) -> No
     - The database record (cascades to frame_objects)
     """
     video_path = Path(detection.video_path)
+    if not video_path.resolve().is_relative_to(video_dir.resolve()):
+        logger.error(f"Refusing to delete path outside video_dir: {video_path}")
+        return
+
     if video_path.exists():
         video_path.unlink()
 

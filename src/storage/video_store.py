@@ -239,6 +239,7 @@ class VideoStore:
                 return datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
         except (ValueError, IndexError):
             pass
+        logger.warning(f"Could not parse timestamp from filename: {filename!r}, falling back to mtime")
         return None
 
 

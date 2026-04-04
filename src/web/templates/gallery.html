@@ -104,26 +104,29 @@ function createDetectionCard(detection) {
     const soundBadge = detection.sound_class
         ? `<span class="badge bg-info text-dark">🔊 ${detection.sound_species || detection.sound_class}</span>`
         : '';
-    
+
     col.innerHTML = `
         <div class="card h-100">
             <div class="position-absolute top-0 start-0 m-2" style="z-index: 1;">
-                <input type="checkbox" class="form-check-input detection-checkbox" 
+                <input type="checkbox" class="form-check-input detection-checkbox"
                        data-id="${detection.id}" onchange="updateBulkActions()">
             </div>
             ${starIcon}
             <a href="/detection/${detection.id}" class="text-decoration-none">
-                <img class="card-img-top" style="height: 180px; object-fit: cover;"
-                     src="/thumbnails/${detection.video_filename.replace(/\.[^.]+$/, '.jpg')}"
-                     alt="Detection ${detection.id}"
-                     loading="lazy">
-                <div class="card-body">
-                    <p class="card-text text-muted small mb-2">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <span class="badge ${getTriggerBadgeClass(detection.trigger_type)}">${detection.trigger_type}</span>
+                <div class="position-relative">
+                    <img class="card-img-top" style="height: 180px; object-fit: cover;"
+                         src="/thumbnails/${detection.video_filename.replace(/\.[^.]+$/, '.jpg')}"
+                         alt="Detection ${detection.id}"
+                         loading="lazy">
+                    <div class="position-absolute bottom-0 start-0 end-0 px-2 pb-2 d-flex gap-1 flex-wrap"
+                         style="background: linear-gradient(transparent, rgba(0,0,0,0.55));">
                         ${animalInfo}
                         ${soundBadge}
                     </div>
+                </div>
+                <div class="card-body py-2">
+                    <p class="card-text text-muted small mb-1">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
+                    <span class="badge ${getTriggerBadgeClass(detection.trigger_type)}">${detection.trigger_type}</span>
                 </div>
             </a>
         </div>
@@ -178,6 +181,7 @@ async function loadDetections(reset = false) {
         }
     } catch (error) {
         console.error('Error loading detections:', error);
+        WildlifeMonitor.showToast('Failed to load detections: ' + error.message, 'error');
     } finally {
         loading = false;
         loadingSpinner.classList.add('d-none');
@@ -203,6 +207,7 @@ async function loadAnimalClasses() {
         });
     } catch (error) {
         console.error('Error loading animal classes:', error);
+        WildlifeMonitor.showToast('Failed to load animal classes: ' + error.message, 'error');
     }
 }
 

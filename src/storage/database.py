@@ -495,25 +495,35 @@ class Database:
     def get_detection_count(
         self,
         trigger_type: Optional[str] = None,
+        animal_class: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        analyzed: Optional[bool] = None,
     ) -> int:
         """Get count of detections with optional filters."""
         query = "SELECT COUNT(*) FROM detections WHERE 1=1"
         params = []
-        
+
         if trigger_type:
             query += " AND trigger_type = ?"
             params.append(trigger_type)
-        
+
+        if animal_class:
+            query += " AND animal_class = ?"
+            params.append(animal_class)
+
         if start_date:
             query += " AND timestamp >= ?"
             params.append(start_date.isoformat())
-        
+
         if end_date:
             query += " AND timestamp <= ?"
             params.append(end_date.isoformat())
-        
+
+        if analyzed is not None:
+            query += " AND analyzed = ?"
+            params.append(analyzed)
+
         with self._get_connection() as conn:
             row = conn.execute(query, params).fetchone()
             return row[0]

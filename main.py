@@ -67,10 +67,10 @@ class WildlifeMonitor:
         self._cleanup_scheduler = None
         self._web_app = None
         self._web_thread = None
-        self._cleanup_scheduler = None
         self._timelapse_scheduler = None
         self._running = False
         self._simulation_mode = simulation_mode
+        self._detections_since_summary = 0
         self._config_data = self._load_config_data()
         
         self.video_dir.mkdir(parents=True, exist_ok=True)
@@ -82,18 +82,58 @@ class WildlifeMonitor:
         config_file = self.config_path or Path("config.yaml")
         if config_file.exists():
             with open(config_file) as f:
-                return yaml.safe_load(f) or {}
+                data = yaml.safe_load(f) or {}
+            self._validate_config(data)
+            return data
         return {}
+
+    def _validate_config(self, data: dict) -> None:
+        """Validate config values and exit with a clear message on bad input."""
+        errors = []
+
+        daylight = data.get("daylight", {})
+        if daylight.get("enabled"):
+            lat = daylight.get("lat")
+            lng = daylight.get("lng")
+            if lat is not None:
+                try:
+                    if not (-90 <= float(lat) <= 90):
+                        errors.append(f"daylight.lat must be between -90 and 90, got {lat}")
+                except (TypeError, ValueError):
+                    errors.append(f"daylight.lat must be a number, got {lat!r}")
+            if lng is not None:
+                try:
+                    if not (-180 <= float(lng) <= 180):
+                        errors.append(f"daylight.lng must be between -180 and 180, got {lng}")
+                except (TypeError, ValueError):
+                    errors.append(f"daylight.lng must be a number, got {lng!r}")
+
+        for section in ("motion", "hourly"):
+            duration = data.get(section, {}).get("video_duration")
+            if duration is not None:
+                try:
+                    if float(duration) <= 0:
+                        errors.append(f"{section}.video_duration must be positive, got {duration}")
+                except (TypeError, ValueError):
+                    errors.append(f"{section}.video_duration must be a number, got {duration!r}")
+
+        if errors:
+            for msg in errors:
+                logger.error(f"Invalid config: {msg}")
+            sys.exit(1)
     
     def _detect_simulation_mode(self) -> bool:
         """Auto-detect if we should run in simulation mode."""
         if self._simulation_mode is not None:
             return self._simulation_mode
-        
+
         env_simulate = os.environ.get("SIMULATE", "auto")
         if env_simulate != "auto":
             return env_simulate == "1"
-        
+
+        if self._config_data.get("simulation"):
+            return True
+
         try:
             import RPi.GPIO
             return False
@@ -392,7 +432,10 @@ class WildlifeMonitor:
                 metadata.audio_path.unlink(missing_ok=True)
                 logger.debug("No animal detected, audio discarded")
         
-        self._database.update_daily_summary()
+        self._detections_since_summary += 1
+        if self._detections_since_summary >= 10:
+            self._database.update_daily_summary()
+            self._detections_since_summary = 0
     
     def _start_web_server(self) -> None:
         """Start the Flask web server in a background thread."""

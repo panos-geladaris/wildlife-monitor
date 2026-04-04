@@ -1,5 +1,8 @@
 # Wildlife Monitor Configuration
 
+# Force simulation mode (no Pi hardware required). Also settable via SIMULATE=1 env var.
+# simulation: true
+
 # Motion-triggered captures
 motion:
   video_duration: 5.0        # Duration in seconds
