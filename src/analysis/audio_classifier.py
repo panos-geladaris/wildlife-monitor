@@ -178,10 +178,14 @@ class AudioClassifier:
         # Find best animal match from PANNs
         best_class, best_confidence, all_preds = self._extract_animal_class(panns_result)
 
-        # Determine if we should run BirdNET
+        # Determine if we should run BirdNET.
+        # Run if: bird indicated by PANNs or visual classifier, OR if PANNs is not
+        # available (BirdNET acts as standalone pass-1 when PANNs is not installed).
         is_bird_from_panns = best_class == "bird"
         is_bird_from_visual = visual_animal_class == "bird"
-        should_run_birdnet = (is_bird_from_panns or is_bird_from_visual) and self._birdnet_available
+        should_run_birdnet = (
+            is_bird_from_panns or is_bird_from_visual or not self._panns_available
+        ) and self._birdnet_available
 
         # Pass 2: BirdNET — species-level bird ID
         if should_run_birdnet:

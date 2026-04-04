@@ -219,17 +219,39 @@ class TestAudioClassifier:
         assert result.sound_class is None
         assert result.has_sound is False
 
-    def test_classify_panns_unavailable(self, wav_file):
-        """When panns_inference is not installed, should degrade gracefully."""
+    def test_classify_panns_unavailable_visual_bird(self, wav_file):
+        """When PANNs is not installed, BirdNET still runs when visual says bird."""
         classifier = self._make_classifier(panns=False, birdnet=True)
 
-        # With visual_animal_class=bird, should still try BirdNET
         mock_birdnet_result = ("Parus major_Great Tit", 0.88)
         with patch.object(classifier, "_classify_birdnet", return_value=mock_birdnet_result):
             result = classifier.classify_audio(wav_file, visual_animal_class="bird")
 
         assert result.sound_class == "bird"
         assert result.sound_species == "Parus major_Great Tit"
+
+    def test_classify_panns_unavailable_no_visual_still_runs_birdnet(self, wav_file):
+        """When PANNs is not installed, BirdNET runs unconditionally as the primary detector."""
+        classifier = self._make_classifier(panns=False, birdnet=True)
+
+        mock_birdnet_result = ("Turdus merula_Eurasian Blackbird", 0.82)
+        with patch.object(classifier, "_classify_birdnet", return_value=mock_birdnet_result):
+            # No visual_animal_class — bird only audible, not seen
+            result = classifier.classify_audio(wav_file)
+
+        assert result.sound_class == "bird"
+        assert result.sound_species == "Turdus merula_Eurasian Blackbird"
+        assert result.sound_confidence == 0.82
+
+    def test_classify_panns_unavailable_birdnet_no_match(self, wav_file):
+        """When PANNs is not installed and BirdNET finds nothing, result is empty."""
+        classifier = self._make_classifier(panns=False, birdnet=True)
+
+        with patch.object(classifier, "_classify_birdnet", return_value=None):
+            result = classifier.classify_audio(wav_file)
+
+        assert result.sound_class is None
+        assert result.has_sound is False
 
     def test_classify_birdnet_unavailable_uses_panns(self, wav_file):
         """When birdnet is not installed, should use PANNs result for birds."""
