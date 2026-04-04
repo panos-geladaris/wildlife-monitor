@@ -25,6 +25,9 @@ def __getattr__(name: str):
     if name in ("annotate_frame", "save_annotated_frames", "cleanup_annotated_frames"):
         from .annotator import annotate_frame, save_annotated_frames, cleanup_annotated_frames
         return {"annotate_frame": annotate_frame, "save_annotated_frames": save_annotated_frames, "cleanup_annotated_frames": cleanup_annotated_frames}[name]
+    if name in ("AudioClassifier", "AudioClassificationResult"):
+        from .audio_classifier import AudioClassifier, AudioClassificationResult
+        return {"AudioClassifier": AudioClassifier, "AudioClassificationResult": AudioClassificationResult}[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -41,4 +44,6 @@ __all__ = [
     "annotate_frame",
     "save_annotated_frames",
     "cleanup_annotated_frames",
+    "AudioClassifier",
+    "AudioClassificationResult",
 ]

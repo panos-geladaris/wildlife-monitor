@@ -62,6 +62,7 @@ class WildlifeMonitor:
         self._capture_service = None
         self._classifier = None
         self._detector = None
+        self._audio_classifier = None
         self._database = None
         self._cleanup_scheduler = None
         self._web_app = None
@@ -155,6 +156,32 @@ class WildlifeMonitor:
             logger.warning(f"Failed to initialize detector: {e}")
             self._detector = None
     
+    def _init_audio_classifier(self) -> None:
+        """Initialize the audio sound classifier if enabled in config."""
+        audio_analysis_cfg = self._config_data.get("audio_analysis", {})
+        if not audio_analysis_cfg.get("enabled", False):
+            logger.info("Audio analysis disabled, skipping audio classifier")
+            return
+
+        try:
+            from src.analysis.audio_classifier import AudioClassifier
+            daylight_cfg = self._config_data.get("daylight", {})
+            self._audio_classifier = AudioClassifier(
+                panns_min_confidence=audio_analysis_cfg.get("panns_min_confidence", 0.3),
+                birdnet_min_confidence=audio_analysis_cfg.get("birdnet_min_confidence", 0.5),
+                panns_enabled=audio_analysis_cfg.get("panns_enabled", True),
+                birdnet_enabled=audio_analysis_cfg.get("birdnet_enabled", True),
+                lat=daylight_cfg.get("lat"),
+                lng=daylight_cfg.get("lng"),
+            )
+            logger.info("Audio classifier initialized (PANNs + BirdNET)")
+        except ImportError as e:
+            logger.warning(f"Audio classification dependencies not available: {e}")
+            self._audio_classifier = None
+        except Exception as e:
+            logger.warning(f"Failed to initialize audio classifier: {e}")
+            self._audio_classifier = None
+
     def _init_audio_recorder(self):
         """Initialize the audio recorder if enabled in config."""
         audio_cfg = self._config_data.get("audio", {})
@@ -323,10 +350,41 @@ class WildlifeMonitor:
             except Exception as e:
                 logger.error(f"Object detection failed for {metadata.filepath}: {e}")
         
+        # Audio classification (runs after visual analysis)
+        if self._audio_classifier and metadata.audio_path and metadata.audio_path.exists():
+            try:
+                current = self._database.get_detection(detection_id)
+                visual_class = current.animal_class if current else None
+
+                audio_result = self._audio_classifier.classify_audio(
+                    metadata.audio_path,
+                    visual_animal_class=visual_class,
+                )
+
+                if audio_result.has_sound:
+                    self._database.update_detection(
+                        detection_id,
+                        sound_class=audio_result.sound_class,
+                        sound_species=audio_result.sound_species,
+                        sound_confidence=audio_result.sound_confidence,
+                    )
+                    species_info = f" — {audio_result.sound_species}" if audio_result.sound_species else ""
+                    logger.info(
+                        f"Audio: {audio_result.sound_class} "
+                        f"({audio_result.sound_confidence:.1%}){species_info}"
+                    )
+                else:
+                    logger.info("No animal sound detected in audio")
+            except Exception as e:
+                logger.error(f"Audio classification failed: {e}")
+
         # Mux audio into video if an animal was detected, otherwise discard it
         if metadata.audio_path and metadata.audio_path.exists():
             det = self._database.get_detection(detection_id)
-            animal_found = det and det.animal_class and det.animal_class != "unknown"
+            animal_found = det and (
+                (det.animal_class and det.animal_class != "unknown")
+                or det.sound_class is not None
+            )
             if animal_found:
                 from src.capture.audio_mux import mux_audio
                 mux_audio(metadata.filepath, metadata.audio_path)
@@ -415,6 +473,7 @@ class WildlifeMonitor:
         if capture:
             self._init_classifier()
             self._init_detector()
+            self._init_audio_classifier()
             self._init_capture_service()
             self._capture_service.start()
             self._init_timelapse_scheduler()

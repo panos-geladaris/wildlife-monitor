@@ -35,6 +35,15 @@ audio:
   device: "plughw:1,0"          # ALSA device (run `arecord -l` to find yours)
   sample_rate: 44100
 
+# Audio sound classification (requires audio capture enabled)
+audio_analysis:
+  enabled: false
+  panns_enabled: true              # Pass 1: broad animal sound detection
+  panns_min_confidence: 0.3        # PANNs minimum confidence threshold
+  birdnet_enabled: true            # Pass 2: bird species identification
+  birdnet_min_confidence: 0.5      # BirdNET minimum confidence threshold
+  # Location-based filtering for BirdNET (reuses daylight lat/lng if not set)
+
 # Object detection settings
 detection:
   enabled: true

@@ -379,6 +379,58 @@ class TestHighlights:
         assert highlights == []
 
 
+class TestSoundClassification:
+    """Tests for sound classification fields in detections."""
+
+    def test_default_sound_fields_none(self, db, sample_detection):
+        """New detections should have NULL sound fields."""
+        detection_id = db.add_detection(sample_detection)
+        detection = db.get_detection(detection_id)
+
+        assert detection.sound_class is None
+        assert detection.sound_species is None
+        assert detection.sound_confidence is None
+
+    def test_update_sound_fields(self, db, sample_detection):
+        """Sound classification fields should be updatable."""
+        detection_id = db.add_detection(sample_detection)
+
+        success = db.update_detection(
+            detection_id,
+            sound_class="bird",
+            sound_species="Turdus merula_Eurasian Blackbird",
+            sound_confidence=0.91,
+        )
+        assert success is True
+
+        detection = db.get_detection(detection_id)
+        assert detection.sound_class == "bird"
+        assert detection.sound_species == "Turdus merula_Eurasian Blackbird"
+        assert detection.sound_confidence == 0.91
+
+    def test_update_sound_class_only(self, db, sample_detection):
+        """Should be able to set sound_class without species."""
+        detection_id = db.add_detection(sample_detection)
+
+        db.update_detection(detection_id, sound_class="dog", sound_confidence=0.82)
+
+        detection = db.get_detection(detection_id)
+        assert detection.sound_class == "dog"
+        assert detection.sound_species is None
+        assert detection.sound_confidence == 0.82
+
+    def test_sound_columns_exist(self, db):
+        """The sound columns should exist in the detections table."""
+        with db._get_connection() as conn:
+            columns = [
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(detections)").fetchall()
+            ]
+        assert "sound_class" in columns
+        assert "sound_species" in columns
+        assert "sound_confidence" in columns
+
+
 class TestDailySummary:
     """Tests for daily summary functionality."""
     
