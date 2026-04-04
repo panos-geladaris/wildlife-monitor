@@ -122,25 +122,28 @@ class AudioClassifier:
 
     def __init__(
         self,
-        min_confidence: float = 0.5,
+        panns_min_confidence: float = 0.3,
+        birdnet_min_confidence: float = 0.5,
+        panns_enabled: bool = True,
+        birdnet_enabled: bool = True,
         lat: Optional[float] = None,
         lng: Optional[float] = None,
     ):
-        self.min_confidence = min_confidence
+        self.panns_min_confidence = panns_min_confidence
+        self.birdnet_min_confidence = birdnet_min_confidence
         self.lat = lat
         self.lng = lng
 
-        self._panns_available = PANNS_AVAILABLE
-        self._birdnet_available = BIRDNET_AVAILABLE
+        self._panns_available = PANNS_AVAILABLE and panns_enabled
+        self._birdnet_available = BIRDNET_AVAILABLE and birdnet_enabled
 
         self._panns_model = None
         self._birdnet_model = None
 
         logger.info(
             f"AudioClassifier initialized: "
-            f"panns={'yes' if self._panns_available else 'no'}, "
-            f"birdnet={'yes' if self._birdnet_available else 'no'}, "
-            f"threshold={min_confidence}"
+            f"panns={'yes' if self._panns_available else 'no'} (threshold={panns_min_confidence}), "
+            f"birdnet={'yes' if self._birdnet_available else 'no'} (threshold={birdnet_min_confidence})"
         )
 
     def classify_audio(
@@ -227,11 +230,11 @@ class AudioClassifier:
                 all_preds.append((label, confidence))
                 if category == "animal":
                     # Keep as fallback in case no specific category is found
-                    if confidence > fallback_confidence and confidence >= self.min_confidence:
+                    if confidence > fallback_confidence and confidence >= self.panns_min_confidence:
                         fallback_class = category
                         fallback_confidence = confidence
                     continue
-                if confidence > best_confidence and confidence >= self.min_confidence:
+                if confidence > best_confidence and confidence >= self.panns_min_confidence:
                     best_class = category
                     best_confidence = confidence
 
@@ -302,7 +305,7 @@ class AudioClassifier:
 
         for _, row in predictions.iterrows():
             confidence = row["confidence"]
-            if confidence > best_confidence and confidence >= self.min_confidence:
+            if confidence > best_confidence and confidence >= self.birdnet_min_confidence:
                 best_species = row["species_name"]
                 best_confidence = confidence
 

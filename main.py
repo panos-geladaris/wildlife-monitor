@@ -167,7 +167,10 @@ class WildlifeMonitor:
             from src.analysis.audio_classifier import AudioClassifier
             daylight_cfg = self._config_data.get("daylight", {})
             self._audio_classifier = AudioClassifier(
-                min_confidence=audio_analysis_cfg.get("min_confidence", 0.5),
+                panns_min_confidence=audio_analysis_cfg.get("panns_min_confidence", 0.3),
+                birdnet_min_confidence=audio_analysis_cfg.get("birdnet_min_confidence", 0.5),
+                panns_enabled=audio_analysis_cfg.get("panns_enabled", True),
+                birdnet_enabled=audio_analysis_cfg.get("birdnet_enabled", True),
                 lat=daylight_cfg.get("lat"),
                 lng=daylight_cfg.get("lng"),
             )

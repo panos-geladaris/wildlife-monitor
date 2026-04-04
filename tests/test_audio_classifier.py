@@ -74,15 +74,27 @@ class TestAudioClassifier:
 
     def test_init_defaults(self):
         classifier = AudioClassifier()
-        assert classifier.min_confidence == 0.5
+        assert classifier.panns_min_confidence == 0.3
+        assert classifier.birdnet_min_confidence == 0.5
         assert classifier.lat is None
         assert classifier.lng is None
 
     def test_init_custom_params(self):
-        classifier = AudioClassifier(min_confidence=0.7, lat=51.5, lng=-0.12)
-        assert classifier.min_confidence == 0.7
+        classifier = AudioClassifier(
+            panns_min_confidence=0.4,
+            birdnet_min_confidence=0.7,
+            lat=51.5,
+            lng=-0.12,
+        )
+        assert classifier.panns_min_confidence == 0.4
+        assert classifier.birdnet_min_confidence == 0.7
         assert classifier.lat == 51.5
         assert classifier.lng == -0.12
+
+    def test_init_model_toggles(self):
+        classifier = AudioClassifier(panns_enabled=False, birdnet_enabled=False)
+        assert classifier._panns_available is False
+        assert classifier._birdnet_available is False
 
     @pytest.fixture
     def wav_file(self):
@@ -94,7 +106,7 @@ class TestAudioClassifier:
 
     def _make_classifier(self, panns=True, birdnet=True):
         """Create a classifier with availability flags set for testing."""
-        classifier = AudioClassifier(min_confidence=0.5)
+        classifier = AudioClassifier(panns_min_confidence=0.5, birdnet_min_confidence=0.5)
         classifier._panns_available = panns
         classifier._birdnet_available = birdnet
         return classifier
