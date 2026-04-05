@@ -600,6 +600,66 @@ class TestReclassifyApi:
         assert "sound_confidence" in data
         assert data["message"] == "Re-classification complete"
 
+    def test_reclassify_muxes_audio_when_animal_detected_and_wav_present(
+        self, client, app, db, detection_with_video
+    ):
+        """When animal is detected and WAV exists, mux_audio is called and steps show ok."""
+        det_id, video_path = detection_with_video
+        wav_path = video_path.with_suffix(".wav")
+        wav_path.write_bytes(b"fake wav data")
+
+        with patch("src.capture.audio_mux.mux_audio", return_value=True) as mock_mux:
+            response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        mock_mux.assert_called_once_with(video_path, wav_path)
+        assert response.get_json()["steps"]["audio_mux"] == "ok"
+
+    def test_reclassify_warns_when_animal_detected_but_no_wav(
+        self, client, app, db, detection_with_video
+    ):
+        """When animal is detected but no WAV exists, steps shows no_wav."""
+        det_id, video_path = detection_with_video
+        assert not video_path.with_suffix(".wav").exists()
+
+        response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        assert response.get_json()["steps"]["audio_mux"] == "no_wav"
+
+    def test_reclassify_skips_mux_when_no_animal_detected(
+        self, client, app, db, detection_with_video
+    ):
+        """When no animal is detected, mux_audio is not called even if a WAV exists."""
+        det_id, video_path = detection_with_video
+
+        mock_result = MagicMock()
+        mock_result.animal_class = "unknown"
+        mock_result.confidence = 0.1
+        mock_result.bird_species = None
+        self._mock_classifier_instance.classify_video.return_value = mock_result
+
+        with patch("src.capture.audio_mux.mux_audio") as mock_mux:
+            response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        mock_mux.assert_not_called()
+        assert "audio_mux" not in response.get_json()["steps"]
+
+    def test_reclassify_mux_failure_recorded_in_steps(
+        self, client, app, db, detection_with_video
+    ):
+        """When mux_audio returns False, steps shows failed."""
+        det_id, video_path = detection_with_video
+        wav_path = video_path.with_suffix(".wav")
+        wav_path.write_bytes(b"fake wav data")
+
+        with patch("src.capture.audio_mux.mux_audio", return_value=False):
+            response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        assert response.get_json()["steps"]["audio_mux"] == "failed"
+
 
 class TestContentType:
     """Every JSON API endpoint must return Content-Type: application/json.
