@@ -4,9 +4,12 @@ REST API endpoints for wildlife monitor.
 
 import logging
 import shutil
+import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from flask import Blueprint, jsonify, request, current_app
+
+_last_test_capture: float = 0.0
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +106,7 @@ def list_detections():
         trigger_type = request.args.get("trigger_type")
         animal_class = request.args.get("animal_class")
         analyzed = request.args.get("analyzed")
-        limit = int(request.args.get("limit", 50))
+        limit = min(int(request.args.get("limit", 50)), 500)
         offset = int(request.args.get("offset", 0))
         
         start_date = None
@@ -127,7 +130,15 @@ def list_detections():
             limit=limit,
             offset=offset,
         )
-        
+
+        total_count = db.get_detection_count(
+            trigger_type=trigger_type,
+            animal_class=animal_class,
+            start_date=start_date,
+            end_date=end_date,
+            analyzed=analyzed_bool,
+        )
+
         return jsonify({
             "detections": [
                 {
@@ -148,6 +159,7 @@ def list_detections():
                 for d in detections
             ],
             "count": len(detections),
+            "total_count": total_count,
             "limit": limit,
             "offset": offset,
         })
@@ -219,7 +231,7 @@ def list_highlights():
     """List highlighted detections, newest first."""
     try:
         db = get_database()
-        limit = int(request.args.get("limit", 50))
+        limit = min(int(request.args.get("limit", 50)), 500)
         offset = int(request.args.get("offset", 0))
 
         detections = db.get_highlighted_detections(limit=limit, offset=offset)
@@ -302,8 +314,8 @@ def list_videos():
         video_store = get_video_store()
         
         trigger_type = request.args.get("trigger_type")
-        limit = int(request.args.get("limit", 50))
-        
+        limit = min(int(request.args.get("limit", 50)), 500)
+
         videos = video_store.list_videos(
             trigger_type=trigger_type,
             limit=limit,
@@ -386,31 +398,12 @@ def get_animal_stats():
         days = int(request.args.get("days", 30))
         
         start_date = datetime.now() - timedelta(days=days)
-        detections = db.get_detections(
-            start_date=start_date,
-            analyzed=True,
-            limit=10000,
-        )
-        
-        # Count by animal class
-        animal_counts = {}
-        for d in detections:
-            if d.animal_class:
-                animal_counts[d.animal_class] = animal_counts.get(d.animal_class, 0) + 1
-        
-        # Sort by count
-        sorted_animals = sorted(
-            animal_counts.items(),
-            key=lambda x: x[1],
-            reverse=True,
-        )
-        
+        animals = db.get_animal_counts(start_date=start_date, analyzed=True)
+        total_analyzed = db.get_detection_count(start_date=start_date, analyzed=True)
+
         return jsonify({
-            "animals": [
-                {"animal_class": animal, "count": count}
-                for animal, count in sorted_animals
-            ],
-            "total_analyzed": len(detections),
+            "animals": animals,
+            "total_analyzed": total_analyzed,
             "days": days,
         })
     except Exception as e:
@@ -442,17 +435,15 @@ def get_summary():
         )
         
         # Get today's animal breakdown
-        today_detections = db.get_detections(
-            start_date=today_start,
-            end_date=today_end,
-            analyzed=True,
-            limit=1000,
-        )
-        
-        animal_counts = {}
-        for d in today_detections:
-            if d.animal_class and d.animal_class != "unknown":
-                animal_counts[d.animal_class] = animal_counts.get(d.animal_class, 0) + 1
+        animal_counts = {
+            row["animal_class"]: row["count"]
+            for row in db.get_animal_counts(
+                start_date=today_start,
+                end_date=today_end,
+                analyzed=True,
+                exclude_unknown=True,
+            )
+        }
         
         # Recent detections
         recent = db.get_detections(limit=5)
@@ -584,6 +575,8 @@ def reclassify_detection(detection_id: int):
         if not video_path.exists():
             return jsonify({"error": "Video file not found"}), 404
 
+        steps = {}
+
         # Run classification
         from src.analysis import AnimalClassifier
         classifier = AnimalClassifier(
@@ -601,6 +594,7 @@ def reclassify_detection(detection_id: int):
             bird_species=result.bird_species,
             analyzed=True,
         )
+        steps["visual_classification"] = "ok"
 
         # Re-run object detection
         try:
@@ -648,10 +642,13 @@ def reclassify_detection(detection_id: int):
                         )
 
             detector.unload_model()
+            steps["object_detection"] = "ok"
         except ImportError:
             logger.warning("Object detection dependencies not available")
+            steps["object_detection"] = "skipped"
         except Exception as e:
             logger.warning(f"Object detection failed during reclassify: {e}")
+            steps["object_detection"] = f"failed: {e}"
 
         # Re-run audio classification if the original WAV is still on disk
         wav_path = video_path.with_suffix(".wav")
@@ -682,12 +679,41 @@ def reclassify_detection(detection_id: int):
                     )
                 else:
                     logger.info("Reclassify audio: no animal sound detected")
+                steps["audio_classification"] = "ok"
             except ImportError:
                 logger.warning("Audio classification dependencies not available, skipping")
+                steps["audio_classification"] = "skipped"
             except Exception as e:
                 logger.warning(f"Audio classification failed during reclassify: {e}")
+                steps["audio_classification"] = f"failed: {e}"
         else:
             logger.debug(f"No WAV file found alongside video, skipping audio reclassification")
+            steps["audio_classification"] = "no_wav"
+
+        # Mux audio into video if an animal was detected and WAV file is available
+        current = db.get_detection(detection_id)
+        animal_found = current and (
+            (current.animal_class and current.animal_class != "unknown")
+            or current.sound_class is not None
+        )
+        if animal_found:
+            if wav_path.exists():
+                try:
+                    from src.capture.audio_mux import mux_audio
+                    if mux_audio(video_path, wav_path):
+                        steps["audio_mux"] = "ok"
+                    else:
+                        logger.warning(f"Audio mux failed for detection {detection_id}")
+                        steps["audio_mux"] = "failed"
+                except Exception as e:
+                    logger.warning(f"Audio mux failed during reclassify: {e}")
+                    steps["audio_mux"] = f"failed: {e}"
+            else:
+                logger.warning(
+                    f"Animal detected in detection {detection_id} "
+                    f"but no WAV file available to mux"
+                )
+                steps["audio_mux"] = "no_wav"
 
         updated = db.get_detection(detection_id)
         return jsonify({
@@ -699,6 +725,7 @@ def reclassify_detection(detection_id: int):
             "sound_species": updated.sound_species,
             "sound_confidence": updated.sound_confidence,
             "analyzed": updated.analyzed,
+            "steps": steps,
             "message": "Re-classification complete",
         })
     except ImportError:
@@ -714,11 +741,20 @@ def test_capture():
     Trigger an on-demand 4-second test capture with full analysis.
 
     Requires the MONITOR instance to be available (not web-only mode).
+    Rate limited to 1 request per 10 seconds.
 
     Returns:
         Detection ID and analysis results.
     """
+    global _last_test_capture
     TEST_CAPTURE_DURATION = 4.0
+    TEST_CAPTURE_RATE_LIMIT = 10.0
+
+    now = time.monotonic()
+    if now - _last_test_capture < TEST_CAPTURE_RATE_LIMIT:
+        remaining = int(TEST_CAPTURE_RATE_LIMIT - (now - _last_test_capture)) + 1
+        return jsonify({"error": f"Rate limit: wait {remaining}s before triggering another test capture"}), 429
+    _last_test_capture = now
 
     monitor = current_app.config.get("MONITOR")
     if monitor is None or getattr(monitor, "_capture_service", None) is None:
@@ -752,7 +788,7 @@ def list_timelapses():
     """List timelapses, newest first."""
     try:
         db = get_database()
-        limit = int(request.args.get("limit", 50))
+        limit = min(int(request.args.get("limit", 50)), 500)
         offset = int(request.args.get("offset", 0))
         timelapses = db.get_timelapses(limit=limit, offset=offset)
         return jsonify({

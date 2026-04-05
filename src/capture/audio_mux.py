@@ -72,6 +72,16 @@ def mux_audio(video_path: Path, audio_path: Path) -> bool:
             tmp_path.unlink(missing_ok=True)
             return False
 
+        original_size = video_path.stat().st_size
+        output_size = tmp_path.stat().st_size
+        if output_size < original_size * 0.8:
+            logger.warning(
+                f"FFmpeg output too small ({output_size} B < 80% of {original_size} B), "
+                "refusing to replace original"
+            )
+            tmp_path.unlink(missing_ok=True)
+            return False
+
         # Atomically replace original video
         tmp_path.replace(video_path)
         audio_path.unlink(missing_ok=True)

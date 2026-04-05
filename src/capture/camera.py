@@ -175,8 +175,9 @@ class Camera:
         """
         if self._is_recording:
             raise RuntimeError("Recording already in progress")
-        
+
         duration = duration or self.default_duration
+        duration = max(0.5, min(float(duration), 300.0))
         filepath = self._generate_filename(reason)
         start_time = datetime.now()
         

@@ -599,3 +599,105 @@ class TestReclassifyApi:
         assert "sound_species" in data
         assert "sound_confidence" in data
         assert data["message"] == "Re-classification complete"
+
+    def test_reclassify_muxes_audio_when_animal_detected_and_wav_present(
+        self, client, app, db, detection_with_video
+    ):
+        """When animal is detected and WAV exists, mux_audio is called and steps show ok."""
+        det_id, video_path = detection_with_video
+        wav_path = video_path.with_suffix(".wav")
+        wav_path.write_bytes(b"fake wav data")
+
+        with patch("src.capture.audio_mux.mux_audio", return_value=True) as mock_mux:
+            response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        mock_mux.assert_called_once_with(video_path, wav_path)
+        assert response.get_json()["steps"]["audio_mux"] == "ok"
+
+    def test_reclassify_warns_when_animal_detected_but_no_wav(
+        self, client, app, db, detection_with_video
+    ):
+        """When animal is detected but no WAV exists, steps shows no_wav."""
+        det_id, video_path = detection_with_video
+        assert not video_path.with_suffix(".wav").exists()
+
+        response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        assert response.get_json()["steps"]["audio_mux"] == "no_wav"
+
+    def test_reclassify_skips_mux_when_no_animal_detected(
+        self, client, app, db, detection_with_video
+    ):
+        """When no animal is detected, mux_audio is not called even if a WAV exists."""
+        det_id, video_path = detection_with_video
+
+        mock_result = MagicMock()
+        mock_result.animal_class = "unknown"
+        mock_result.confidence = 0.1
+        mock_result.bird_species = None
+        self._mock_classifier_instance.classify_video.return_value = mock_result
+
+        with patch("src.capture.audio_mux.mux_audio") as mock_mux:
+            response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        mock_mux.assert_not_called()
+        assert "audio_mux" not in response.get_json()["steps"]
+
+    def test_reclassify_mux_failure_recorded_in_steps(
+        self, client, app, db, detection_with_video
+    ):
+        """When mux_audio returns False, steps shows failed."""
+        det_id, video_path = detection_with_video
+        wav_path = video_path.with_suffix(".wav")
+        wav_path.write_bytes(b"fake wav data")
+
+        with patch("src.capture.audio_mux.mux_audio", return_value=False):
+            response = client.post(f"/api/detections/{det_id}/reclassify")
+
+        assert response.status_code == 200
+        assert response.get_json()["steps"]["audio_mux"] == "failed"
+
+
+class TestContentType:
+    """Every JSON API endpoint must return Content-Type: application/json.
+
+    An endpoint that accidentally returns an HTML error page (e.g. a Flask
+    500 page) would have the wrong content-type and should fail here.
+    """
+
+    JSON = "application/json"
+
+    def test_list_detections(self, client):
+        assert client.get("/api/detections").content_type == self.JSON
+
+    def test_get_detection_not_found(self, client):
+        assert client.get("/api/detections/9999").content_type == self.JSON
+
+    def test_get_detection_by_id(self, client, sample_detections):
+        det_id = sample_detections[0].id
+        assert client.get(f"/api/detections/{det_id}").content_type == self.JSON
+
+    def test_api_status(self, client):
+        assert client.get("/api/status").content_type == self.JSON
+
+    def test_daily_stats(self, client):
+        assert client.get("/api/stats/daily").content_type == self.JSON
+
+    def test_animal_stats(self, client):
+        assert client.get("/api/stats/animals").content_type == self.JSON
+
+    def test_summary(self, client):
+        assert client.get("/api/stats/summary").content_type == self.JSON
+
+    def test_highlights(self, client):
+        assert client.get("/api/highlights").content_type == self.JSON
+
+    def test_toggle_highlight(self, client, sample_detections):
+        det_id = sample_detections[0].id
+        assert client.post(f"/api/detections/{det_id}/highlight").content_type == self.JSON
+
+    def test_delete_detection_not_found(self, client):
+        assert client.delete("/api/detections/9999").content_type == self.JSON

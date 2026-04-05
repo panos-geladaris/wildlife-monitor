@@ -34,6 +34,7 @@ class AudioRecorder:
         self.sample_rate = sample_rate
         self._process: Optional[subprocess.Popen] = None
         self._output_path: Optional[Path] = None
+        self._duration: Optional[float] = None
 
     def start(self, output_path: Path, duration: float) -> Optional[Path]:
         """
@@ -52,6 +53,7 @@ class AudioRecorder:
             return None
 
         self._output_path = Path(output_path)
+        self._duration = duration
 
         cmd = [
             FFMPEG_BIN,
@@ -87,8 +89,9 @@ class AudioRecorder:
         if self._process is None:
             return None
 
+        timeout = (self._duration + 5) if self._duration is not None else 30
         try:
-            self._process.wait(timeout=30)
+            self._process.wait(timeout=timeout)
             if self._process.returncode != 0:
                 stderr = self._process.stderr.read().decode(errors="replace") if self._process.stderr else ""
                 logger.warning(f"Audio recording failed (rc={self._process.returncode}): {stderr[:200]}")
@@ -100,6 +103,7 @@ class AudioRecorder:
             return None
         finally:
             self._process = None
+            self._duration = None
 
         if self._output_path and self._output_path.exists() and self._output_path.stat().st_size > 0:
             logger.debug(f"Audio recorded: {self._output_path.name}")
