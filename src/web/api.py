@@ -690,6 +690,31 @@ def reclassify_detection(detection_id: int):
             logger.debug(f"No WAV file found alongside video, skipping audio reclassification")
             steps["audio_classification"] = "no_wav"
 
+        # Mux audio into video if an animal was detected and WAV file is available
+        current = db.get_detection(detection_id)
+        animal_found = current and (
+            (current.animal_class and current.animal_class != "unknown")
+            or current.sound_class is not None
+        )
+        if animal_found:
+            if wav_path.exists():
+                try:
+                    from src.capture.audio_mux import mux_audio
+                    if mux_audio(video_path, wav_path):
+                        steps["audio_mux"] = "ok"
+                    else:
+                        logger.warning(f"Audio mux failed for detection {detection_id}")
+                        steps["audio_mux"] = "failed"
+                except Exception as e:
+                    logger.warning(f"Audio mux failed during reclassify: {e}")
+                    steps["audio_mux"] = f"failed: {e}"
+            else:
+                logger.warning(
+                    f"Animal detected in detection {detection_id} "
+                    f"but no WAV file available to mux"
+                )
+                steps["audio_mux"] = "no_wav"
+
         updated = db.get_detection(detection_id)
         return jsonify({
             "id": updated.id,
