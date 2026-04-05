@@ -283,3 +283,96 @@ class TestAudioClassifier:
             result = classifier.classify_audio(wav_file)
 
         assert len(result.all_predictions) > 0
+
+
+class TestClassifyBirdnetInternals:
+    """Unit tests for _classify_birdnet resampling behaviour."""
+
+    def _make_classifier_with_mocks(self):
+        """Return a classifier with birdnet available and librosa/soundfile mocked."""
+        import sys
+        import numpy as np
+
+        mock_librosa = MagicMock()
+        mock_librosa.load.return_value = (np.zeros(48000, dtype="float32"), 48000)
+
+        mock_sf = MagicMock()
+
+        mock_model = MagicMock()
+        mock_df = MagicMock()
+        mock_df.iterrows.return_value = iter([])
+        mock_model.predict.return_value = mock_df
+
+        classifier = AudioClassifier(birdnet_min_confidence=0.1)
+        classifier._birdnet_available = True
+        classifier._birdnet_model = mock_model
+
+        return classifier, mock_librosa, mock_sf, mock_model, mock_df
+
+    def test_resamples_to_48k_before_predict(self, tmp_path):
+        """_classify_birdnet must write a 48 kHz temp file, not pass the raw source path."""
+        import sys
+        wav_path = tmp_path / "test_44100.wav"
+        wav_path.write_bytes(b"fake")
+
+        classifier, mock_librosa, mock_sf, mock_model, mock_df = self._make_classifier_with_mocks()
+
+        captured_paths = []
+
+        def capture_path(path, **kwargs):
+            captured_paths.append(path)
+            return mock_df
+
+        mock_model.predict.side_effect = capture_path
+
+        with patch.dict("sys.modules", {"librosa": mock_librosa, "soundfile": mock_sf}):
+            classifier._classify_birdnet(wav_path)
+
+        assert len(captured_paths) == 1
+        assert Path(captured_paths[0]) != wav_path, (
+            "BirdNET received the raw source path instead of a resampled temp file"
+        )
+        mock_librosa.load.assert_called_once_with(
+            str(wav_path), sr=AudioClassifier.BIRDNET_SAMPLE_RATE, mono=True
+        )
+
+    def test_resampled_at_correct_sample_rate(self, tmp_path):
+        """soundfile.write must be called with BIRDNET_SAMPLE_RATE (48000 Hz)."""
+        import sys
+        wav_path = tmp_path / "test.wav"
+        wav_path.write_bytes(b"fake")
+
+        classifier, mock_librosa, mock_sf, mock_model, _ = self._make_classifier_with_mocks()
+
+        with patch.dict("sys.modules", {"librosa": mock_librosa, "soundfile": mock_sf}):
+            classifier._classify_birdnet(wav_path)
+
+        args = mock_sf.write.call_args
+        written_sr = args[0][2] if args[0] else args[1]["samplerate"]
+        assert written_sr == AudioClassifier.BIRDNET_SAMPLE_RATE
+
+    def test_temp_file_cleaned_up_after_predict(self, tmp_path):
+        """The resampled temp WAV must be deleted even if predict raises."""
+        import sys
+        wav_path = tmp_path / "test.wav"
+        wav_path.write_bytes(b"fake")
+
+        classifier, mock_librosa, mock_sf, mock_model, _ = self._make_classifier_with_mocks()
+
+        captured_paths = []
+
+        def capture_and_raise(path, **kwargs):
+            # Create the file so unlink has something to remove
+            p = Path(path)
+            p.write_bytes(b"tmp")
+            captured_paths.append(p)
+            raise RuntimeError("model error")
+
+        mock_model.predict.side_effect = capture_and_raise
+
+        with patch.dict("sys.modules", {"librosa": mock_librosa, "soundfile": mock_sf}):
+            with pytest.raises(RuntimeError):
+                classifier._classify_birdnet(wav_path)
+
+        assert len(captured_paths) == 1
+        assert not captured_paths[0].exists(), "Temp file was not cleaned up after predict error"

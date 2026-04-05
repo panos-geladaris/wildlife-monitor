@@ -282,9 +282,18 @@ class AudioClassifier:
 
         return result
 
+    # BirdNET was trained on 48 kHz audio.  Passing files at any other rate
+    # (e.g. the default 44100 Hz from the recorder) causes BirdNET to attempt
+    # its own internal resampling, which fails silently on embedded hardware.
+    # We resample explicitly with librosa — the same approach used for PANNs.
+    BIRDNET_SAMPLE_RATE = 48000
+
     def _classify_birdnet(self, wav_path: Path) -> Optional[tuple[str, float]]:
         """
         Run BirdNET inference on an audio file.
+
+        The file is resampled to 48 kHz mono before being passed to BirdNET
+        to avoid silent failures from sample-rate mismatches on Pi hardware.
 
         Returns:
             (species_name, confidence) tuple, or None if no species detected.
@@ -296,14 +305,25 @@ class AudioClassifier:
             self._birdnet_model = birdnet.load("acoustic", "2.4", "tflite")
             logger.info("BirdNET model loaded")
 
+        import tempfile
+        import librosa
+        import soundfile as sf
+
+        audio, _ = librosa.load(str(wav_path), sr=self.BIRDNET_SAMPLE_RATE, mono=True)
+
         kwargs = {}
         if self.lat is not None and self.lng is not None:
             kwargs["lat"] = self.lat
             kwargs["lon"] = self.lng
 
-        predictions = self._birdnet_model.predict(str(wav_path), **kwargs)
+        tmp_path = Path(tempfile.mktemp(suffix=".wav"))
+        try:
+            sf.write(str(tmp_path), audio, self.BIRDNET_SAMPLE_RATE, subtype="PCM_16")
+            predictions = self._birdnet_model.predict(str(tmp_path), **kwargs)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
-        # Find the best prediction above threshold
+        # Find the highest-confidence prediction across all 3-second chunks
         best_species = None
         best_confidence = 0.0
 
