@@ -169,17 +169,29 @@ class CaptureService:
         self._motion_thread.start()
         
         if self._daylight_gate is not None:
-            self._daylight_gate.refresh_if_needed(self._daylight_gate._now_fn())
-            allowed = self._daylight_gate.is_capture_allowed()
-            sun = self._daylight_gate.sun_times
-            if sun:
-                logger.info(
-                    "Daylight capture: sunrise %s — sunset %s (currently %s)",
-                    sun.sunrise.strftime("%H:%M"),
-                    sun.sunset.strftime("%H:%M"),
-                    "active" if allowed else "paused",
-                )
-            self._schedule_daylight_transition()
+            # Fetch sun times in the background so a slow/absent network at
+            # boot doesn't delay startup.  Captures fall back to
+            # config.daylight_fallback until the fetch completes.
+            def _prefetch_daylight():
+                self._daylight_gate.refresh_if_needed(self._daylight_gate._now_fn())
+                sun = self._daylight_gate.sun_times
+                if sun:
+                    allowed = self._daylight_gate.is_capture_allowed()
+                    logger.info(
+                        "Daylight capture: sunrise %s — sunset %s (currently %s)",
+                        sun.sunrise.strftime("%H:%M"),
+                        sun.sunset.strftime("%H:%M"),
+                        "active" if allowed else "paused",
+                    )
+                else:
+                    logger.info(
+                        "Daylight gate enabled but sun times unavailable at startup "
+                        "(fallback=%s); will retry on first capture check",
+                        self.config.daylight_fallback,
+                    )
+                self._schedule_daylight_transition()
+
+            threading.Thread(target=_prefetch_daylight, daemon=True).start()
         
         logger.info("Capture service started")
         logger.info(f"  - Simulation mode: {self.config.simulation_mode}")
@@ -230,7 +242,12 @@ class CaptureService:
         logger.info("Capture service stopped")
     
     def trigger_manual_capture(self, duration: float = None) -> VideoMetadata:
-        """Manually trigger a video capture."""
+        """Manually trigger a video capture.
+
+        Note: intentionally bypasses the motion cooldown — manual captures
+        are explicit user actions and should always succeed regardless of
+        whether a motion-triggered capture recently ran.
+        """
         metadata = self._camera.capture_video(
             duration=duration, reason=CaptureReason.MANUAL
         )

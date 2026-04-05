@@ -599,3 +599,45 @@ class TestReclassifyApi:
         assert "sound_species" in data
         assert "sound_confidence" in data
         assert data["message"] == "Re-classification complete"
+
+
+class TestContentType:
+    """Every JSON API endpoint must return Content-Type: application/json.
+
+    An endpoint that accidentally returns an HTML error page (e.g. a Flask
+    500 page) would have the wrong content-type and should fail here.
+    """
+
+    JSON = "application/json"
+
+    def test_list_detections(self, client):
+        assert client.get("/api/detections").content_type == self.JSON
+
+    def test_get_detection_not_found(self, client):
+        assert client.get("/api/detections/9999").content_type == self.JSON
+
+    def test_get_detection_by_id(self, client, sample_detections):
+        det_id = sample_detections[0].id
+        assert client.get(f"/api/detections/{det_id}").content_type == self.JSON
+
+    def test_api_status(self, client):
+        assert client.get("/api/status").content_type == self.JSON
+
+    def test_daily_stats(self, client):
+        assert client.get("/api/stats/daily").content_type == self.JSON
+
+    def test_animal_stats(self, client):
+        assert client.get("/api/stats/animals").content_type == self.JSON
+
+    def test_summary(self, client):
+        assert client.get("/api/stats/summary").content_type == self.JSON
+
+    def test_highlights(self, client):
+        assert client.get("/api/highlights").content_type == self.JSON
+
+    def test_toggle_highlight(self, client, sample_detections):
+        det_id = sample_detections[0].id
+        assert client.post(f"/api/detections/{det_id}/highlight").content_type == self.JSON
+
+    def test_delete_detection_not_found(self, client):
+        assert client.delete("/api/detections/9999").content_type == self.JSON

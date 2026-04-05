@@ -98,9 +98,10 @@ class TestAudioClassifier:
 
     @pytest.fixture
     def wav_file(self):
-        """Create a temporary .wav file."""
+        """Create a temporary .wav file with data flushed to disk."""
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             f.write(b"RIFF" + b"\x00" * 100)
+            f.flush()
             yield Path(f.name)
         Path(f.name).unlink(missing_ok=True)
 

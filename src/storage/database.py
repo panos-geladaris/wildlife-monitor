@@ -90,14 +90,20 @@ class Database:
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
                 
-                CREATE INDEX IF NOT EXISTS idx_detections_timestamp 
+                CREATE INDEX IF NOT EXISTS idx_detections_timestamp
                 ON detections(timestamp);
-                
-                CREATE INDEX IF NOT EXISTS idx_detections_trigger_type 
+
+                CREATE INDEX IF NOT EXISTS idx_detections_trigger_type
                 ON detections(trigger_type);
-                
-                CREATE INDEX IF NOT EXISTS idx_detections_animal_class 
+
+                CREATE INDEX IF NOT EXISTS idx_detections_animal_class
                 ON detections(animal_class);
+
+                CREATE INDEX IF NOT EXISTS idx_detections_timestamp_animal
+                ON detections(timestamp, animal_class);
+
+                CREATE INDEX IF NOT EXISTS idx_detections_analyzed
+                ON detections(analyzed);
 
                 CREATE TABLE IF NOT EXISTS frame_objects (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -535,23 +541,56 @@ class Database:
         A detection is "empty" when:
         - analyzed = TRUE
         - animal_class IS NULL OR animal_class = 'unknown'
+        - sound_class IS NULL  (audio-only detections are NOT empty)
         - No rows exist in frame_objects for that detection_id
         """
         with self._get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT * FROM detections
-                WHERE analyzed = 1
-                  AND (animal_class IS NULL OR animal_class = 'unknown')
-                  AND timestamp < ?
-                  AND id NOT IN (
-                      SELECT DISTINCT detection_id FROM frame_objects
-                  )
-                ORDER BY timestamp ASC
+                SELECT d.* FROM detections d
+                LEFT JOIN frame_objects fo ON d.id = fo.detection_id
+                WHERE d.analyzed = 1
+                  AND (d.animal_class IS NULL OR d.animal_class = 'unknown')
+                  AND d.sound_class IS NULL
+                  AND d.timestamp < ?
+                  AND fo.detection_id IS NULL
+                ORDER BY d.timestamp ASC
                 """,
                 (before.isoformat(),),
             ).fetchall()
             return [self._row_to_detection(row) for row in rows]
+
+    def get_animal_counts(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        analyzed: Optional[bool] = None,
+        exclude_unknown: bool = True,
+    ) -> list[dict]:
+        """Return animal class counts via SQL GROUP BY (avoids loading all rows)."""
+        query = (
+            "SELECT animal_class, COUNT(*) AS count FROM detections "
+            "WHERE animal_class IS NOT NULL"
+        )
+        params: list = []
+
+        if exclude_unknown:
+            query += " AND animal_class != 'unknown'"
+        if start_date:
+            query += " AND timestamp >= ?"
+            params.append(start_date.isoformat())
+        if end_date:
+            query += " AND timestamp <= ?"
+            params.append(end_date.isoformat())
+        if analyzed is not None:
+            query += " AND analyzed = ?"
+            params.append(analyzed)
+
+        query += " GROUP BY animal_class ORDER BY count DESC"
+
+        with self._get_connection() as conn:
+            rows = conn.execute(query, params).fetchall()
+            return [{"animal_class": row["animal_class"], "count": row["count"]} for row in rows]
 
     def set_highlighted(self, detection_id: int, highlighted: bool) -> bool:
         """Set the highlighted flag on a detection. Returns True if updated."""

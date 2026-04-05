@@ -121,6 +121,16 @@ class TestGetEmptyDetections:
         assert len(results) == 1
         assert results[0].id == det_id
 
+    def test_excludes_detection_with_sound_class_only(self, temp_env):
+        """A detection with sound_class but no animal_class must NOT be treated as empty."""
+        db, video_dir, _ = temp_env
+        det_id, _ = _add_detection(db, video_dir, age_hours=48, analyzed=True)
+        db.update_detection(det_id, sound_class="bird")
+
+        cutoff = datetime.now() - timedelta(hours=24)
+        results = db.get_empty_detections(before=cutoff)
+        assert len(results) == 0
+
 
 class TestCleanupDetection:
     def test_deletes_all_artifacts(self, temp_env):

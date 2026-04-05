@@ -398,31 +398,12 @@ def get_animal_stats():
         days = int(request.args.get("days", 30))
         
         start_date = datetime.now() - timedelta(days=days)
-        detections = db.get_detections(
-            start_date=start_date,
-            analyzed=True,
-            limit=10000,
-        )
-        
-        # Count by animal class
-        animal_counts = {}
-        for d in detections:
-            if d.animal_class:
-                animal_counts[d.animal_class] = animal_counts.get(d.animal_class, 0) + 1
-        
-        # Sort by count
-        sorted_animals = sorted(
-            animal_counts.items(),
-            key=lambda x: x[1],
-            reverse=True,
-        )
-        
+        animals = db.get_animal_counts(start_date=start_date, analyzed=True)
+        total_analyzed = db.get_detection_count(start_date=start_date, analyzed=True)
+
         return jsonify({
-            "animals": [
-                {"animal_class": animal, "count": count}
-                for animal, count in sorted_animals
-            ],
-            "total_analyzed": len(detections),
+            "animals": animals,
+            "total_analyzed": total_analyzed,
             "days": days,
         })
     except Exception as e:
@@ -454,17 +435,15 @@ def get_summary():
         )
         
         # Get today's animal breakdown
-        today_detections = db.get_detections(
-            start_date=today_start,
-            end_date=today_end,
-            analyzed=True,
-            limit=1000,
-        )
-        
-        animal_counts = {}
-        for d in today_detections:
-            if d.animal_class and d.animal_class != "unknown":
-                animal_counts[d.animal_class] = animal_counts.get(d.animal_class, 0) + 1
+        animal_counts = {
+            row["animal_class"]: row["count"]
+            for row in db.get_animal_counts(
+                start_date=today_start,
+                end_date=today_end,
+                analyzed=True,
+                exclude_unknown=True,
+            )
+        }
         
         # Recent detections
         recent = db.get_detections(limit=5)

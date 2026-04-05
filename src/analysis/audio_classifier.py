@@ -167,6 +167,10 @@ class AudioClassifier:
             logger.warning(f"Audio file not found: {wav_path}")
             return AudioClassificationResult()
 
+        if wav_path.stat().st_size == 0:
+            logger.warning(f"Audio file is empty: {wav_path}")
+            return AudioClassificationResult()
+
         # Pass 1: PANNs — broad animal sound detection
         panns_result: dict[str, float] = {}
         if self._panns_available:
