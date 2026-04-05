@@ -74,26 +74,26 @@ const animalFilter = document.getElementById('animalFilter');
 const startDate = document.getElementById('startDate');
 const endDate = document.getElementById('endDate');
 
-function getTriggerBadgeClass(triggerType) {
+function getTriggerColor(triggerType) {
     switch (triggerType) {
-        case 'motion': return 'bg-success';
-        case 'scheduled': return 'bg-primary';
-        case 'manual': return 'bg-secondary';
-        default: return 'bg-secondary';
+        case 'motion':    return '#198754';  // Bootstrap success green
+        case 'scheduled': return '#0d6efd';  // Bootstrap primary blue
+        case 'manual':    return '#6c757d';  // Bootstrap secondary grey
+        default:          return '#6c757d';
     }
 }
 
 function createDetectionCard(detection) {
     const col = document.createElement('div');
     col.className = 'col';
-    
-    const confidence = detection.confidence 
-        ? `${(detection.confidence * 100).toFixed(1)}%` 
+
+    const confidence = detection.confidence
+        ? `${(detection.confidence * 100).toFixed(1)}%`
         : '';
-    
+
     const emoji = detection.animal_class ? WildlifeMonitor.getAnimalIcon(detection.animal_class) + ' ' : '';
     const speciesInfo = detection.bird_species ? ` (${detection.bird_species})` : '';
-    const animalInfo = detection.animal_class 
+    const animalInfo = detection.animal_class
         ? `<span class="badge bg-warning text-dark">${emoji}${detection.animal_class}${speciesInfo} ${confidence}</span>`
         : '';
 
@@ -105,8 +105,10 @@ function createDetectionCard(detection) {
         ? `<span class="badge bg-info text-dark">🔊 ${detection.sound_species || detection.sound_class}</span>`
         : '';
 
+    const stripeColor = getTriggerColor(detection.trigger_type);
+
     col.innerHTML = `
-        <div class="card h-100">
+        <div class="card h-100" style="border-left: 4px solid ${stripeColor};">
             <div class="position-absolute top-0 start-0 m-2" style="z-index: 1;">
                 <input type="checkbox" class="form-check-input detection-checkbox"
                        data-id="${detection.id}" onchange="updateBulkActions()">
@@ -125,8 +127,7 @@ function createDetectionCard(detection) {
                     </div>
                 </div>
                 <div class="card-body py-2">
-                    <p class="card-text text-muted small mb-1">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
-                    <span class="badge ${getTriggerBadgeClass(detection.trigger_type)}">${detection.trigger_type}</span>
+                    <p class="card-text text-muted small mb-0">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
                 </div>
             </a>
         </div>

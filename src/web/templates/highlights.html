@@ -38,12 +38,12 @@ const grid = document.getElementById('highlightGrid');
 const loadingSpinner = document.getElementById('loadingSpinner');
 const noResults = document.getElementById('noResults');
 
-function getTriggerBadgeClass(triggerType) {
+function getTriggerColor(triggerType) {
     switch (triggerType) {
-        case 'motion': return 'bg-success';
-        case 'scheduled': return 'bg-primary';
-        case 'manual': return 'bg-secondary';
-        default: return 'bg-secondary';
+        case 'motion':    return '#198754';
+        case 'scheduled': return '#0d6efd';
+        case 'manual':    return '#6c757d';
+        default:          return '#6c757d';
     }
 }
 
@@ -61,8 +61,10 @@ function createHighlightCard(detection) {
         ? `<span class="badge bg-warning text-dark">${emoji}${detection.animal_class} ${confidence}</span>`
         : '';
 
+    const stripeColor = getTriggerColor(detection.trigger_type);
+
     col.innerHTML = `
-        <div class="card h-100">
+        <div class="card h-100" style="border-left: 4px solid ${stripeColor};">
             <div class="position-absolute top-0 start-0 m-2" style="z-index: 1;">
                 <input type="checkbox" class="form-check-input detection-checkbox"
                        data-id="${detection.id}" onchange="updateBulkActions()">
@@ -81,8 +83,7 @@ function createHighlightCard(detection) {
                     </div>
                 </div>
                 <div class="card-body py-2">
-                    <p class="card-text text-muted small mb-1">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
-                    <span class="badge ${getTriggerBadgeClass(detection.trigger_type)}">${detection.trigger_type}</span>
+                    <p class="card-text text-muted small mb-0">${WildlifeMonitor.formatRelativeTime(detection.timestamp)}</p>
                 </div>
             </a>
         </div>
