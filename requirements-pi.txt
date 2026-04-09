@@ -21,3 +21,9 @@ RPi.GPIO>=0.7.1
 #
 # Note: Model inference on Pi 4 takes ~1-2 seconds per frame with MobileNetV3.
 # If PyTorch installation fails, the system will still work without ML classification.
+
+# Breakout Garden I²C sensors
+ltr559>=0.1.1
+bh1745>=0.0.5
+bme680>=1.0.5
+smbus2>=0.4.1
