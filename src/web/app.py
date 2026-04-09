@@ -3,6 +3,7 @@ Flask application for wildlife monitor web UI.
 """
 
 import logging
+import os
 from pathlib import Path
 from flask import Flask, render_template, send_from_directory
 from flask_cors import CORS
@@ -43,8 +44,9 @@ def create_app(
     app.config["VIDEO_DIR"] = video_dir or DEFAULT_VIDEO_DIR
     app.config["DB_PATH"] = db_path or DEFAULT_DB_PATH
     
-    # Enable CORS for API endpoints
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # Enable CORS for API endpoints (restrict to same-origin in production)
+    cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:*")
+    CORS(app, resources={r"/api/*": {"origins": cors_origins}})
     
     # Register blueprints
     app.register_blueprint(api_bp, url_prefix="/api")
